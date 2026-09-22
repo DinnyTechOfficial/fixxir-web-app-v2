@@ -1,73 +1,23 @@
+import { ArrowRight, Laptop, Smartphone, type LucideIcon } from "lucide-react";
+
+const services: [LucideIcon, string, string[]][] = [
+  [Smartphone, "Phone repair", ["Screen", "Battery", "Charging", "Camera / Audio", "Won’t power on"]],
+  [Laptop, "Laptop repair", ["Screen", "Battery", "Keyboard", "SSD / RAM", "Power / Charging"]],
+];
+
 export default function ServicesSection() {
   return (
-    <section className="bg-gray-50 py-16 sm:py-24 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-          What we repair
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-          {/* Phones */}
-          <div className="bg-white rounded-lg p-8 shadow-sm">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Phones</h3>
-            <ul className="space-y-3 text-gray-700">
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>iPhone</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>Samsung</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>Tecno</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>Infinix</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>Select other Android devices</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Laptops */}
-          <div className="bg-white rounded-lg p-8 shadow-sm">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Laptops</h3>
-            <ul className="space-y-3 text-gray-700">
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>HP</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>Dell</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>Lenovo</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>MacBook</span>
-              </li>
-              <li className="flex items-center">
-                <span className="text-blue-600 mr-3">•</span>
-                <span>Select Windows laptops</span>
-              </li>
-            </ul>
-          </div>
+    <section id="services" className="bg-[#eef4fc] px-5 py-20 sm:px-8 sm:py-28">
+      <div className="mx-auto max-w-6xl">
+        <p className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#1769e0]">Start with the device</p><h2 className="text-4xl font-black tracking-tighter text-[#10213f] sm:text-5xl">What do you need fixed?</h2>
+        <div className="mt-12 grid gap-5 lg:grid-cols-2">
+          {services.map(([Icon, title, items]) => (
+            <div key={title as string} className="group relative overflow-hidden rounded-3xl border border-[#d4e0ef] bg-white p-7 shadow-[0_12px_30px_rgba(16,33,63,0.05)] sm:p-9">
+              <div className="absolute -right-8 -top-8 text-[#eef4fc] transition duration-500 group-hover:scale-110"><Icon size={190} strokeWidth={1} /></div><div className="relative"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e5f0ff] text-[#1769e0]"><Icon size={28} /></div><h3 className="mt-7 text-2xl font-black text-[#10213f]">{title}</h3><div className="mt-5 flex flex-wrap gap-2">{items.map((item) => <span key={item} className="rounded-full bg-[#f3f7fc] px-3 py-2 text-sm font-medium text-[#61708a]">{item}</span>)}</div><a href="/repair/request" className="mt-8 inline-flex items-center gap-2 font-bold text-[#1769e0]">Start {title} <ArrowRight size={17} /></a></div>
+            </div>
+          ))}
         </div>
-
-        <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <p className="text-sm text-gray-700">
-            <strong>Complex repairs:</strong> For motherboard repairs and serious
-            liquid damage, we perform a diagnosis first before quoting. This ensures we
-            can deliver an accurate repair plan.
-          </p>
-        </div>
+        <p className="mt-6 text-sm text-[#61708a]"><strong className="text-[#10213f]">Complex repair?</strong> Liquid damage or board-level issues are diagnosed first, so your repair plan is based on what we find.</p>
       </div>
     </section>
   );

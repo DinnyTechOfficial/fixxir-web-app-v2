@@ -1,141 +1,247 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
-  Upload,
-  Smartphone,
+  Loader2,
   Laptop,
-  CheckCircle2,
+  Search,
+  Smartphone,
+  Upload,
 } from "lucide-react";
+import {
+  searchBrands,
+  searchModels,
+  type DeviceBrand,
+  type DeviceModel,
+  type DeviceType,
+} from "./device-catalog";
 
-// Step 1: Device Type & Model
-function Step1Device({ data, onNext, onChange }: any) {
-  const [step1Data, setStep1Data] = useState(data?.step1 || {});
+interface SelectedDeviceValue {
+  id: string | null;
+  name: string;
+  custom: boolean;
+}
 
-  const phones = [
-    { name: "iPhone", models: ["iPhone 15", "iPhone 14", "iPhone 13", "iPhone 12", "iPhone 11", "Other iPhone"] },
-    { name: "Samsung", models: ["S24", "S23", "S22", "A54", "A53", "Other Samsung"] },
-    { name: "Tecno", models: ["Spark 10", "Camon 20", "Phantom", "Other Tecno"] },
-    { name: "Infinix", models: ["Note 30", "Hot 30", "Zero Flip", "Other Infinix"] },
-    { name: "Other Android", models: ["Other"] },
-  ];
+interface DeviceStepData {
+  deviceType?: DeviceType;
+  brand?: SelectedDeviceValue;
+  model?: SelectedDeviceValue | null;
+  modelUnknown?: boolean;
+}
 
-  const laptops = [
-    { name: "HP", models: ["Pavilion", "Envy", "EliteBook", "ProBook", "Other HP"] },
-    { name: "Dell", models: ["XPS", "Inspiron", "Vostro", "Latitude", "Other Dell"] },
-    { name: "Lenovo", models: ["ThinkPad", "Legion", "IdeaPad", "Yoga", "Other Lenovo"] },
-    { name: "MacBook", models: ["MacBook Air M1/M2", "MacBook Pro 13", "MacBook Pro 14/16", "Other MacBook"] },
-    { name: "Other Windows", models: ["Other"] },
-  ];
+interface RepairFormData {
+  step1?: DeviceStepData;
+  step2?: Step2Data;
+  step3?: Step3Data;
+  step4?: Step4Data;
+  step5?: Step5Data;
+  [key: string]: unknown;
+}
 
-  const deviceType = step1Data.deviceType;
-  const brands = deviceType === "phone" ? phones : deviceType === "laptop" ? laptops : [];
+interface Step2Data {
+  issue?: string;
+  details?: string;
+  photos?: File[];
+}
 
-  const handleBrandSelect = (brand: string) => {
-    setStep1Data({ ...step1Data, brand, model: "" });
+interface Step3Data {
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
+interface Step4Data {
+  area?: string;
+  address?: string;
+  handoff?: string;
+}
+
+interface Step5Data {
+  urgency?: string;
+}
+
+interface StepNavigationProps {
+  data: RepairFormData;
+  onNext: () => void;
+  onPrev: () => void;
+  onChange: (data: RepairFormData) => void;
+}
+
+interface Step1Props {
+  data: RepairFormData;
+  onNext: () => void;
+  onChange: (data: RepairFormData) => void;
+}
+
+function Step1Device({ data, onNext, onChange }: Step1Props) {
+  const [step1Data, setStep1Data] = useState<DeviceStepData>(data.step1 || {});
+  const [brandQuery, setBrandQuery] = useState(data.step1?.brand?.name || "");
+  const [modelQuery, setModelQuery] = useState(data.step1?.model?.name || "");
+  const [brandResults, setBrandResults] = useState<DeviceBrand[]>([]);
+  const [modelResults, setModelResults] = useState<DeviceModel[]>([]);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [brandLoading, setBrandLoading] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const brandInputRef = useRef<HTMLInputElement>(null);
+  const modelInputRef = useRef<HTMLInputElement>(null);
+  const brandRequest = useRef(0);
+  const modelRequest = useRef(0);
+
+  useEffect(() => {
+    if (!step1Data.deviceType) return;
+    const requestId = ++brandRequest.current;
+    const timer = window.setTimeout(() => {
+      if (requestId === brandRequest.current) {
+        setBrandResults(searchBrands(step1Data.deviceType as DeviceType, brandQuery));
+        setBrandLoading(false);
+      }
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [brandQuery, step1Data.deviceType]);
+
+  useEffect(() => {
+    if (!step1Data.deviceType || !step1Data.brand || step1Data.brand.custom) return;
+    const requestId = ++modelRequest.current;
+    const timer = window.setTimeout(() => {
+      if (requestId === modelRequest.current) {
+        setModelResults(searchModels(step1Data.deviceType as DeviceType, step1Data.brand?.id || "", modelQuery));
+        setModelLoading(false);
+      }
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [modelQuery, step1Data.brand, step1Data.deviceType]);
+
+  const updateStep1 = (next: DeviceStepData) => setStep1Data(next);
+
+  const selectType = (deviceType: DeviceType) => {
+    updateStep1({ deviceType });
+    setBrandQuery("");
+    setModelQuery("");
+    setBrandOpen(false);
+    setModelOpen(false);
+    setErrors({});
+  };
+
+  const selectBrand = (brand: DeviceBrand) => {
+    updateStep1({ deviceType: step1Data.deviceType, brand: { id: brand.id, name: brand.name, custom: false }, model: null, modelUnknown: false });
+    setBrandQuery(brand.name);
+    setModelQuery("");
+    setBrandOpen(false);
+    setModelOpen(false);
+    setErrors((current) => ({ ...current, brand: "" }));
+    window.setTimeout(() => modelInputRef.current?.focus(), 0);
+  };
+
+  const applyCustomBrand = () => {
+    const name = brandQuery.trim();
+    if (!name) return;
+    updateStep1({ deviceType: step1Data.deviceType, brand: { id: null, name, custom: true }, model: null, modelUnknown: false });
+    setBrandOpen(false);
+    setModelQuery("");
+    setErrors((current) => ({ ...current, brand: "" }));
+    window.setTimeout(() => modelInputRef.current?.focus(), 0);
+  };
+
+  const selectModel = (model: DeviceModel) => {
+    updateStep1({ ...step1Data, model: { id: model.id, name: model.name, custom: false }, modelUnknown: false });
+    setModelQuery(model.name);
+    setModelOpen(false);
+    setErrors((current) => ({ ...current, model: "" }));
+  };
+
+  const applyCustomModel = () => {
+    const name = modelQuery.trim();
+    if (!name) return;
+    updateStep1({ ...step1Data, model: { id: null, name, custom: true }, modelUnknown: false });
+    setModelOpen(false);
+    setErrors((current) => ({ ...current, model: "" }));
+  };
+
+  const markUnknownModel = () => {
+    updateStep1({ ...step1Data, model: null, modelUnknown: true });
+    setModelQuery("");
+    setModelOpen(false);
+    setErrors((current) => ({ ...current, model: "" }));
   };
 
   const handleNext = () => {
-    if (!step1Data.deviceType || !step1Data.brand || !step1Data.model) {
-      alert("Please select device type, brand, and model");
+    const nextErrors: Record<string, string> = {};
+    if (!step1Data.deviceType) nextErrors.deviceType = "Choose Phone or Laptop.";
+    if (!step1Data.brand) nextErrors.brand = "Select or enter a brand.";
+    if (step1Data.brand && !step1Data.model && !step1Data.modelUnknown) nextErrors.model = "Select a model, enter one manually, or choose “I’m not sure”.";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      if (nextErrors.deviceType) document.getElementById("device-type")?.focus();
+      else if (nextErrors.brand) brandInputRef.current?.focus();
+      else modelInputRef.current?.focus();
       return;
     }
     onChange({ ...data, step1: step1Data });
     onNext();
   };
 
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">What do you need repaired?</h2>
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, type: "brand" | "model") => {
+    const results = type === "brand" ? brandResults : modelResults;
+    const open = type === "brand" ? brandOpen : modelOpen;
+    if (event.key === "Escape") {
+      if (type === "brand") setBrandOpen(false);
+      else setModelOpen(false);
+    } else if (event.key === "ArrowDown" && open && results.length) {
+      event.preventDefault();
+      document.getElementById(`${type}-option-0`)?.focus();
+    } else if (event.key === "Enter" && open && results.length === 0) {
+      event.preventDefault();
+      if (type === "brand") applyCustomBrand();
+      else applyCustomModel();
+    }
+  };
 
-      {/* Device Type Selection */}
+  return (
+    <div className="space-y-7">
+      <div><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Step 1 of 6</p><h2 className="text-2xl font-bold text-gray-900 sm:text-3xl">What do you need repaired?</h2><p className="mt-2 text-sm text-gray-600">Search for your device. If you cannot find it, you can enter it yourself.</p></div>
+
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-3">Device Type *</label>
-        <div className="flex gap-4">
-          {["phone", "laptop"].map((type) => (
-            <button
-              key={type}
-              onClick={() => setStep1Data({ ...step1Data, deviceType: type, brand: "", model: "" })}
-              className={`flex-1 py-3 px-4 rounded-lg border-2 font-semibold transition flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 ${
-                step1Data.deviceType === type
-                  ? "border-blue-600 bg-blue-50 text-blue-600"
-                  : "border-gray-300 text-gray-700 hover:border-gray-400"
-              }`}
-              aria-pressed={step1Data.deviceType === type}
-            >
-              {type === "phone" ? <Smartphone size={20} /> : <Laptop size={20} />}
-              {type === "phone" ? "Phone" : "Laptop"}
-            </button>
-          ))}
+        <label id="device-type" tabIndex={-1} className="mb-3 block text-sm font-semibold text-gray-700">Device type *</label>
+        <div className="grid grid-cols-2 gap-3">
+          {(["phone", "laptop"] as DeviceType[]).map((type) => {
+            const selected = step1Data.deviceType === type;
+            return <button type="button" key={type} onClick={() => selectType(type)} aria-pressed={selected} className={`flex min-h-16 items-center justify-center gap-2 rounded-xl border-2 px-4 font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-600 ${selected ? "border-blue-600 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-700 hover:border-blue-300"}`}>{type === "phone" ? <Smartphone size={23} /> : <Laptop size={23} />}{type === "phone" ? "Phone" : "Laptop"}</button>;
+          })}
         </div>
+        {errors.deviceType && <p className="mt-2 text-sm text-red-600" role="alert">{errors.deviceType}</p>}
       </div>
 
-      {/* Brand Selection */}
-      {deviceType && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Brand</label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {brands.map((brand) => (
-              <button
-                key={brand.name}
-                onClick={() => handleBrandSelect(brand.name)}
-                className={`py-2 px-3 rounded-lg border-2 text-sm font-semibold transition ${
-                  step1Data.brand === brand.name
-                    ? "border-blue-600 bg-blue-50 text-blue-600"
-                    : "border-gray-300 text-gray-700 hover:border-gray-400"
-                }`}
-              >
-                {brand.name}
-              </button>
-            ))}
-          </div>
+      {step1Data.deviceType && <div className="space-y-7">
+        <div className="relative">
+          <label htmlFor="brand-search" className="mb-2 block text-sm font-semibold text-gray-700">Brand *</label>
+          <div className="relative"><Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input ref={brandInputRef} id="brand-search" role="combobox" aria-expanded={brandOpen} aria-controls="brand-results" aria-autocomplete="list" value={brandQuery} onFocus={() => setBrandOpen(true)} onChange={(event) => { setBrandLoading(true); setBrandQuery(event.target.value); setBrandOpen(true); updateStep1({ ...step1Data, brand: undefined, model: null, modelUnknown: false }); }} onKeyDown={(event) => handleInputKeyDown(event, "brand")} placeholder={step1Data.deviceType === "phone" ? "Search phone brand" : "Search laptop brand"} className="min-h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-10 outline-none transition focus:border-blue-600" />{brandLoading && <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-blue-600" />}{step1Data.brand && !brandOpen && <Check size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600" />}</div>
+          {brandOpen && <div id="brand-results" role="listbox" className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-lg">{brandResults.map((brand, index) => <button type="button" role="option" aria-selected={step1Data.brand?.id === brand.id} id={`brand-option-${index}`} key={brand.id} onClick={() => selectBrand(brand)} className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm font-medium text-gray-800 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none">{brand.name}</button>)}{brandQuery.trim() && brandResults.length === 0 && !brandLoading && <p className="px-3 py-3 text-sm text-gray-500">No matching brand found.</p>}{brandQuery.trim() && <button type="button" onClick={applyCustomBrand} className="mt-1 flex min-h-11 w-full items-center rounded-lg border-t border-gray-100 px-3 text-left text-sm font-semibold text-blue-600 hover:bg-blue-50">Use “{brandQuery.trim()}” as brand</button>}</div>}
+          {errors.brand && <p className="mt-2 text-sm text-red-600" role="alert">{errors.brand}</p>}
         </div>
-      )}
 
-      {/* Model Selection */}
-      {step1Data.brand && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Model</label>
-          <div className="space-y-2">
-            {brands
-              .find((b) => b.name === step1Data.brand)
-              ?.models.map((model) => (
-                <button
-                  key={model}
-                  onClick={() => setStep1Data({ ...step1Data, model })}
-                  className={`w-full py-2 px-3 rounded-lg border-2 text-left font-medium transition ${
-                    step1Data.model === model
-                      ? "border-blue-600 bg-blue-50 text-blue-600"
-                      : "border-gray-300 text-gray-700 hover:border-gray-400"
-                  }`}
-                >
-                  {model}
-                </button>
-              ))}
-          </div>
-          <button
-            onClick={() => setStep1Data({ ...step1Data, model: "I'm not sure" })}
-            className="mt-3 text-blue-600 font-semibold text-sm hover:underline"
-          >
-            I'm not sure of the model
-          </button>
-        </div>
-      )}
+        {step1Data.brand && <div className="relative">
+          <label htmlFor="model-search" className="mb-2 block text-sm font-semibold text-gray-700">Model *</label>
+          <div className="relative"><Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input ref={modelInputRef} id="model-search" role="combobox" aria-expanded={modelOpen} aria-controls="model-results" aria-autocomplete="list" value={modelQuery} onFocus={() => setModelOpen(true)} onChange={(event) => { setModelLoading(true); setModelQuery(event.target.value); setModelOpen(true); updateStep1({ ...step1Data, model: null, modelUnknown: false }); }} onKeyDown={(event) => handleInputKeyDown(event, "model")} placeholder="Search your model" className="min-h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-10 outline-none transition focus:border-blue-600" />{modelLoading && <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-blue-600" />}{(step1Data.model || step1Data.modelUnknown) && !modelOpen && <Check size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600" />}</div>
+          {modelOpen && <div id="model-results" role="listbox" className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-lg">{modelResults.map((model, index) => <button type="button" role="option" aria-selected={step1Data.model?.id === model.id} id={`model-option-${index}`} key={model.id} onClick={() => selectModel(model)} className="flex min-h-14 w-full flex-col items-start justify-center rounded-lg px-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"><span className="text-sm font-semibold text-gray-900">{model.name}</span><span className="text-xs text-gray-500">{model.brandName}</span></button>)}{modelQuery.trim() && modelResults.length === 0 && !modelLoading && <p className="px-3 py-3 text-sm text-gray-500">No matching model found.</p>}{modelQuery.trim() && <button type="button" onClick={applyCustomModel} className="mt-1 flex min-h-11 w-full items-center rounded-lg border-t border-gray-100 px-3 text-left text-sm font-semibold text-blue-600 hover:bg-blue-50">Use “{modelQuery.trim()}”</button>}</div>}
+          <button type="button" onClick={markUnknownModel} className="mt-3 text-sm font-semibold text-blue-600 hover:underline">Not sure which model you have? <span className="underline">I’m not sure of the model</span></button>
+          {step1Data.modelUnknown && <p className="mt-2 text-sm text-gray-600">We’ll identify the exact model during diagnosis.</p>}
+          {errors.model && <p className="mt-2 text-sm text-red-600" role="alert">{errors.model}</p>}
+        </div>}
+      </div>}
 
-      <button
-        onClick={handleNext}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 min-h-[44px] flex items-center justify-center gap-2"
-      >
-        Continue <ChevronRight size={20} />
-      </button>
+      <button type="button" onClick={handleNext} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2">Continue <ChevronRight size={20} /></button>
     </div>
   );
 }
 
 // Step 2: Problem Description
-function Step2Problem({ data, onNext, onPrev, onChange }: any) {
+function Step2Problem({ data, onNext, onPrev, onChange }: StepNavigationProps) {
   const [step2Data, setStep2Data] = useState(data?.step2 || {});
 
   const phoneIssues = [
@@ -261,7 +367,7 @@ function Step2Problem({ data, onNext, onPrev, onChange }: any) {
 }
 
 // Step 3: Customer Info
-function Step3CustomerInfo({ data, onNext, onPrev, onChange }: any) {
+function Step3CustomerInfo({ data, onNext, onPrev, onChange }: StepNavigationProps) {
   const [step3Data, setStep3Data] = useState(data?.step3 || {});
 
   const handleNext = () => {
@@ -297,7 +403,7 @@ function Step3CustomerInfo({ data, onNext, onPrev, onChange }: any) {
           placeholder="e.g., +234 901 234 5678"
           className="w-full py-2 px-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 outline-none"
         />
-        <p className="text-xs text-gray-600 mt-1">We'll use this to contact you about your repair</p>
+        <p className="text-xs text-gray-600 mt-1">We&apos;ll use this to contact you about your repair</p>
       </div>
 
       <div>
@@ -330,7 +436,7 @@ function Step3CustomerInfo({ data, onNext, onPrev, onChange }: any) {
 }
 
 // Step 4: Location & Handoff
-function Step4Location({ data, onNext, onPrev, onChange }: any) {
+function Step4Location({ data, onNext, onPrev, onChange }: StepNavigationProps) {
   const [step4Data, setStep4Data] = useState(data?.step4 || {});
 
   const lanosAreas = [
@@ -405,7 +511,7 @@ function Step4Location({ data, onNext, onPrev, onChange }: any) {
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-xs sm:text-sm text-gray-700">
-          <strong>Note:</strong> Free pickup/drop-off is only available in selected Lagos locations. We'll confirm service availability when reviewing your request.
+          <strong>Note:</strong> Free pickup/drop-off is only available in selected Lagos locations. We&apos;ll confirm service availability when reviewing your request.
         </p>
       </div>
 
@@ -428,7 +534,7 @@ function Step4Location({ data, onNext, onPrev, onChange }: any) {
 }
 
 // Step 5: Timing
-function Step5Timing({ data, onNext, onPrev, onChange }: any) {
+function Step5Timing({ data, onNext, onPrev, onChange }: StepNavigationProps) {
   const [step5Data, setStep5Data] = useState(data?.step5 || {});
 
   const timingOptions = [
@@ -492,7 +598,13 @@ function Step5Timing({ data, onNext, onPrev, onChange }: any) {
 }
 
 // Step 6: Review
-function Step6Review({ data, onSubmit, onPrev }: any) {
+interface ReviewProps {
+  data: RepairFormData;
+  onSubmit: () => void;
+  onPrev: () => void;
+}
+
+function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
   const handleSubmit = () => {
     // For now, just log the data
     console.log("Form submitted with data:", data);
@@ -508,7 +620,10 @@ function Step6Review({ data, onSubmit, onPrev }: any) {
         <div>
           <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Device</p>
           <p className="text-lg font-semibold text-gray-900">
-            {data?.step1?.brand} {data?.step1?.model}
+            {data?.step1?.deviceType === "phone" ? "Phone" : "Laptop"}
+          </p>
+          <p className="text-lg font-semibold text-gray-900">
+            {data?.step1?.brand?.name || "Brand not specified"} — {data?.step1?.modelUnknown ? "Model not sure" : data?.step1?.model?.name || "Model not specified"}
           </p>
         </div>
 
@@ -561,8 +676,9 @@ function Step6Review({ data, onSubmit, onPrev }: any) {
 
 // Main Form Component
 export default function RepairRequestForm() {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState<RepairFormData>({});
 
   const totalSteps = 6;
 
@@ -582,11 +698,11 @@ export default function RepairRequestForm() {
 
   const handleSubmit = () => {
     // Navigate to success page
-    window.location.href = "/repair/request/success";
+    router.push("/repair/request/success");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-linear-to-b from-gray-50 to-white py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
         {/* Progress Bar */}
         <div className="mb-8">
