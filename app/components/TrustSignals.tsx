@@ -3,9 +3,9 @@ import { Activity, ClipboardCheck, Search, ShieldCheck, Waypoints } from "lucide
 const proofPoints = [
   [Search, "Clear diagnosis", "Understand the problem before deciding."],
   [ClipboardCheck, "You approve the repair", "No unexpected work or surprise charges."],
-  [Activity, "Repair updates", "Know when your repair moves forward or something changes."],
-  [ShieldCheck, "Quality checked", "Your device is tested before return."],
-  [Waypoints, "One accountable process", "From handoff to return, Fixxir owns the journey."],
+  [Activity, "Repair updates", "Get in touch with Fixxir to ask for an update."],
+  [ShieldCheck, "Quality checked", "Ask us how testing is handled for your repair."],
+  [Waypoints, "A clear process", "Confirm handoff, diagnosis, and repair steps with Fixxir."],
 ];
 
 export default function TrustSignals() {

@@ -24,8 +24,8 @@ This checklist is for deploying the current Next.js app as a static site on Clou
 
 ## Current functional limits
 
-- The repair form currently logs submitted data in the browser and navigates to the success page; it does not save requests to a backend.
-- The success page currently displays a hard-coded request ID.
+- The repair form keeps values in browser memory only; it does not send or save repair requests. Visitors are directed to contact Fixxir instead.
+- The confirmation route contains no generated request ID because request persistence is not implemented.
 - Photo selections are not uploaded or persisted.
 - Static export does not run Next.js SSR, API routes, or server actions. Add a separate backend/API or migrate to a server-capable Cloudflare Workers setup when those features are implemented.
 

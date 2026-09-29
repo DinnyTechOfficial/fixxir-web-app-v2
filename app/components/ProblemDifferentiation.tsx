@@ -40,7 +40,7 @@ export default function ProblemDifferentiation() {
               </li>
               <li className="flex items-start">
                 <span className="text-green-500 mr-3">✓</span>
-                <span>Real-time updates to your device status</span>
+                <span>Repair updates through direct contact</span>
               </li>
               <li className="flex items-start">
                 <span className="text-green-500 mr-3">✓</span>
@@ -52,7 +52,7 @@ export default function ProblemDifferentiation() {
               </li>
               <li className="flex items-start">
                 <span className="text-green-500 mr-3">✓</span>
-                <span>Track your repair from start to return</span>
+                <span>Ask Fixxir for repair status updates</span>
               </li>
             </ul>
           </div>

@@ -31,7 +31,6 @@ Follow [the Cloudflare deployment checklist](docs/cloudflare-deployment-checklis
 
 ## Current application limits
 
-- Repair requests are not persisted; the form logs submission data in the browser and navigates to a confirmation page.
-- The confirmation page uses a placeholder request ID, and photo uploads are not sent anywhere.
-- WhatsApp links use a placeholder phone number that must be replaced before public launch.
+- Repair requests are not persisted; the form only keeps entered data in browser memory and directs customers to contact Fixxir.
+- Photo uploads are not sent anywhere.
 - Static export does not provide Next.js SSR, API routes, or server actions. Add an external API or move to a server-capable Cloudflare Workers setup when backend behavior is implemented.

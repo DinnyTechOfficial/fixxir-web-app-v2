@@ -19,6 +19,13 @@ import {
   type DeviceModel,
   type DeviceType,
 } from "./device-catalog";
+import {
+  FIXXIR_BUSINESS_ADDRESS,
+  FIXXIR_PHONE_DISPLAY,
+  FIXXIR_PHONE_LINK,
+  FIXXIR_SUPPORT_HOURS,
+  getFixxirWhatsAppUrl,
+} from "../../site-info";
 
 interface SelectedDeviceValue {
   id: string | null;
@@ -400,7 +407,7 @@ function Step3CustomerInfo({ data, onNext, onPrev, onChange }: StepNavigationPro
           type="tel"
           value={step3Data.phone || ""}
           onChange={(e) => setStep3Data({ ...step3Data, phone: e.target.value })}
-          placeholder="e.g., +234 901 234 5678"
+          placeholder="Your phone or WhatsApp number"
           className="w-full py-2 px-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 outline-none"
         />
         <p className="text-xs text-gray-600 mt-1">We&apos;ll use this to contact you about your repair</p>
@@ -439,14 +446,9 @@ function Step3CustomerInfo({ data, onNext, onPrev, onChange }: StepNavigationPro
 function Step4Location({ data, onNext, onPrev, onChange }: StepNavigationProps) {
   const [step4Data, setStep4Data] = useState(data?.step4 || {});
 
-  const lanosAreas = [
-    "Ikeja", "VI", "Lekki", "Yaba", "Ikoyi", "Ajah", "Badagry", "Mushin",
-    "Surulere", "Shomolu", "Ilupeju", "Akure", "Other"
-  ];
-
   const handoffOptions = [
-    { value: "pickup", label: "Pickup — Fixxir will pick up from your location" },
-    { value: "dropoff", label: "Drop-off — I'll drop off at Fixxir location" },
+    { value: "pickup", label: "Pickup — ask Fixxir to confirm availability" },
+    { value: "dropoff", label: `Drop-off — contact us first (${FIXXIR_BUSINESS_ADDRESS})` },
     { value: "advise", label: "Let Fixxir advise me — Not sure yet" },
   ];
 
@@ -464,19 +466,14 @@ function Step4Location({ data, onNext, onPrev, onChange }: StepNavigationProps) 
       <h2 className="text-2xl font-bold text-gray-900">Where is your device?</h2>
 
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-3">Area in Lagos</label>
-        <select
+        <label htmlFor="repair-area" className="block text-sm font-semibold text-gray-700 mb-3">Area / neighborhood</label>
+        <input
+          id="repair-area"
           value={step4Data.area || ""}
-          onChange={(e) => setStep4Data({ ...step4Data, area: e.target.value })}
+          onChange={(event) => setStep4Data({ ...step4Data, area: event.target.value })}
+          placeholder="Your area or neighborhood"
           className="w-full py-2 px-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 outline-none"
-        >
-          <option value="">Select your area...</option>
-          {lanosAreas.map((area) => (
-            <option key={area} value={area}>
-              {area}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       <div>
@@ -485,7 +482,7 @@ function Step4Location({ data, onNext, onPrev, onChange }: StepNavigationProps) 
           type="text"
           value={step4Data.address || ""}
           onChange={(e) => setStep4Data({ ...step4Data, address: e.target.value })}
-          placeholder="e.g., 123 Allen Avenue, Ikeja"
+          placeholder="Street and area"
           className="w-full py-2 px-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 outline-none"
         />
       </div>
@@ -511,7 +508,7 @@ function Step4Location({ data, onNext, onPrev, onChange }: StepNavigationProps) 
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-xs sm:text-sm text-gray-700">
-          <strong>Note:</strong> Free pickup/drop-off is only available in selected Lagos locations. We&apos;ll confirm service availability when reviewing your request.
+          <strong>Note:</strong> We&apos;ll confirm handoff availability and any applicable fees before scheduling.
         </p>
       </div>
 
@@ -606,9 +603,6 @@ interface ReviewProps {
 
 function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
   const handleSubmit = () => {
-    // For now, just log the data
-    console.log("Form submitted with data:", data);
-    // TODO: Send to backend API
     onSubmit();
   };
 
@@ -667,7 +661,7 @@ function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
           onClick={handleSubmit}
           className="flex-1 bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition"
         >
-          Submit repair request
+          Continue to contact Fixxir
         </button>
       </div>
     </div>
@@ -704,6 +698,10 @@ export default function RepairRequestForm() {
   return (
     <div className="min-h-screen bg-linear-to-b from-gray-50 to-white py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" role="status">
+          Online repair requests are not active yet. Details entered here are not sent or saved.
+          Contact Fixxir by WhatsApp or phone instead. Support hours: {FIXXIR_SUPPORT_HOURS}.
+        </div>
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex justify-between text-xs font-semibold text-gray-600 mb-3">
@@ -732,13 +730,15 @@ export default function RepairRequestForm() {
         <p className="text-center text-sm text-gray-600 mt-6">
           Questions? Contact us on{" "}
           <a
-            href="https://wa.me/2349000000000"
+            href={getFixxirWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
             className="text-green-600 font-semibold hover:underline"
           >
-            WhatsApp
+            WhatsApp ({FIXXIR_PHONE_DISPLAY})
           </a>
+          <span className="ml-2">Support hours: {FIXXIR_SUPPORT_HOURS}</span>
+          <a href={`tel:${FIXXIR_PHONE_LINK}`} className="ml-2 text-blue-600 font-semibold hover:underline">Call {FIXXIR_PHONE_DISPLAY}</a>
         </p>
       </div>
     </div>

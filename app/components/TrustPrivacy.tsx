@@ -7,8 +7,8 @@ export default function TrustPrivacy() {
               Will you access my data?
             </h3>
             <p className="text-gray-700">
-              No. We don&apos;t access, back up, or retain your personal data on your device. We diagnose
-              the hardware fault only. If you want data removed before handoff, let us know.
+              Ask us what access is needed for your specific diagnosis before handing over your device.
+              Keep a backup of important data and remove personal information where practical.
             </p>
           </div>
 
@@ -17,8 +17,8 @@ export default function TrustPrivacy() {
               What parts are being used?
             </h3>
             <p className="text-gray-700">
-              We use genuine or certified equivalent parts. Your diagnosis and quote will specify
-              the parts. You can ask questions before approving any repair.
+              Parts are certified by Fixxir. Your quote should identify the part type and source
+              before you approve the repair.
             </p>
           </div>
 
@@ -27,8 +27,8 @@ export default function TrustPrivacy() {
               What if the repair fails again?
             </h3>
             <p className="text-gray-700">
-              Repairs come with a warranty. If the same fault reoccurs within the warranty period,
-              we&apos;ll rework it at no cost. Details on your quote.
+              Warranty coverage depends on the repair. Ask us to provide the duration, exclusions,
+              and remedy in writing before you approve.
             </p>
           </div>
 
@@ -37,8 +37,8 @@ export default function TrustPrivacy() {
               How long will it take?
             </h3>
             <p className="text-gray-700">
-              Most standard repairs (screen, battery, keyboard) take 24–48 hours from receipt.
-              Complex repairs may take longer. Your diagnosis will include the timeline.
+              Repair time depends on the fault and part availability. Ask us for an estimate after
+              diagnosis and before approving the repair.
             </p>
           </div>
 
@@ -47,8 +47,7 @@ export default function TrustPrivacy() {
               Who has my device?
             </h3>
             <p className="text-gray-700">
-              One accountable Fixxir process. Your device is tracked from pickup through diagnosis,
-              repair, QA, and return. You can see status anytime in your tracking page.
+              Contact Fixxir directly for updates. Online repair tracking is not currently available.
             </p>
           </div>
         </div>

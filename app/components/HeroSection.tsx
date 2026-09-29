@@ -1,4 +1,5 @@
 import { ShieldCheck, Wrench } from "lucide-react";
+import { getFixxirWhatsAppUrl } from "../site-info";
 
 export default function HeroSection() {
   return (
@@ -17,7 +18,7 @@ export default function HeroSection() {
       <div className="relative z-10 mx-auto max-w-6xl">
         <div className="max-w-[640px]">
           <p className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-[#1769e0]">
-            Phone & laptop repair • Lagos
+            Phone & laptop repair in Lagos and Abuja
           </p>
           <h1 className="text-[clamp(3rem,6vw,5.8rem)] font-black leading-[0.9] tracking-[-0.06em] text-[#10213f]">
             Device repair without the stress.
@@ -36,7 +37,7 @@ export default function HeroSection() {
               Start a repair <Wrench size={17} />
             </a>
             <a
-              href="https://wa.me/2349000000000?text=Hi%20Fixxir%2C%20I%20need%20device%20repair%20help"
+              href={getFixxirWhatsAppUrl("Hi Fixxir, I need device repair help")}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[#c7d5e7] bg-white/85 px-6 font-bold text-[#10213f] backdrop-blur-sm transition hover:border-[#1769e0] hover:text-[#1769e0]"
@@ -47,7 +48,7 @@ export default function HeroSection() {
 
           <p className="mt-5 flex items-center gap-2 text-sm font-medium text-[#61708a]">
             <ShieldCheck size={16} className="text-[#1ca56c]" /> Pickup & return available
-            in selected Lagos areas.
+            Contact us to confirm pickup availability.
           </p>
         </div>
 

@@ -24,15 +24,15 @@ Working through decisions needed before building.
 ### Resolved
 
 - ✅ Stack: Next.js 14+ TypeScript
-- ✅ Deployment: Vercel
-- ✅ Backend: Clarify structure (check /doc)
-- ✅ Payment: Paystack (Nigerian)
-- ✅ WhatsApp: Ready to integrate
-- ✅ Admin: Dashboard already exists
-- ✅ Analytics: GA4 + custom event logging
+- ✅ Deployment: Cloudflare Pages (static export)
+- ⏳ Backend: Not implemented; choose request storage and email/notification delivery
+- ⏳ Payment provider: confirm provider/account before publishing payment claims
+- ⏳ WhatsApp: Direct contact links are configured; automated integration is not implemented
+- ⏳ Admin: Confirm the operational system for receiving and managing repair requests
+- ⏳ Analytics: Provider and event collection need confirmation
 - ✅ Services: Phones + laptops only (no tablets/accessories)
-- ✅ ID format: Generated in backend
-- ✅ Launch 100: Ready to build
+- ⏳ Request ID: Generate only after a request is successfully persisted
+- ⏸️ Launch 100: Paused until eligibility and credit terms are approved
 
 ---
 
@@ -41,13 +41,13 @@ Working through decisions needed before building.
 Status: ✅ **COMPLETE**
 
 **Implemented sections:**
-- [x] Launch 100 banner
+- [ ] Launch 100 banner (paused pending approved offer terms)
 - [x] Hero section with CTA
 - [x] Trust signals (5 proof points)
 - [x] Problem/differentiation comparison
 - [x] Services (phones + laptops)
 - [x] How Fixxir Works (6 steps)
-- [x] Launch 100 program details
+- [ ] Launch 100 program details (paused pending approved offer terms)
 - [x] Trust/Privacy/Warranty FAQ
 - [x] Customer reviews
 - [x] Main FAQ section

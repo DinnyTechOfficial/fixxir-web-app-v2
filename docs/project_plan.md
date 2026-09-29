@@ -1,3 +1,5 @@
+> **Status: Draft planning document.** Service promises, fees, timelines, payment methods, Launch 100 terms, tracking, and request IDs described here are proposals until confirmed by Fixxir and implemented. Do not treat them as approved public claims.
+
 The goal is:
 
 > **Ad / Google / Referral → Landing Page → Repair Request → Qualification → Handoff → Diagnosis → Quote → Approval → Payment → Repair → Updates → QA → Return → Review / Referral**
