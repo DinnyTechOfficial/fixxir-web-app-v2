@@ -28,6 +28,16 @@ body {
   box-sizing: border-box;
 }
 
+.hero-backdrop-image {
+  filter: blur(8px);
+}
+
+@media (min-width: 640px) {
+  .hero-backdrop-image {
+    filter: none;
+  }
+}
+
 ::selection {
   background: #b9d6ff;
   color: var(--navy);

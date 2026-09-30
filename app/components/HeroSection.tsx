@@ -9,7 +9,7 @@ export default function HeroSection() {
     >
       <div
         aria-hidden="true"
-        className="absolute -inset-3 bg-cover bg-center opacity-60 blur-sm sm:inset-0 sm:opacity-100 sm:blur-0"
+        className="hero-backdrop-image absolute -inset-3 bg-cover bg-center opacity-60 sm:inset-0 sm:opacity-100"
         style={{
           backgroundImage: "url('/images/fixxir-hero-landing.webp')",
           backgroundPosition: "65% center",
