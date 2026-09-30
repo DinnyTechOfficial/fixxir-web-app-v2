@@ -47,14 +47,16 @@ Do not relaunch the ₦5,000 offer until those conditions and the fulfilment pro
 
 ### Customer communications
 
-- [ ] Confirm whether the intended provider is Brevo or another email service.
-- [ ] Choose and verify the sender address/domain, customer-support reply-to address, and email templates.
-- [ ] Implement request persistence before promising that a request was received.
-- [ ] Implement the immediate confirmation email only after a successful request save, with a genuine request reference and support contact details.
+- [x] Select Brevo's HTTPS API for transactional receipts while keeping the site on Cloudflare Pages.
+- [x] Set the intended sender/reply-to and implement the branded receipt template; verify sender/domain authentication and real delivery before launch.
+- [ ] Inspect and update the active Apps Script to persist requests and return a genuine request reference; enforce idempotency before enabling intake.
+- [x] Add a fail-closed Pages Function and confirmation flow; keep `REPAIR_INTAKE_ENABLED` off until the external contract and privacy notice are ready.
 - [ ] Decide which team inbox receives new requests and who monitors it during daily support hours.
 - [ ] Decide whether follow-up is by phone, WhatsApp, email, or a combination; do not promise a response deadline until the operation can meet it.
-- [ ] Do not put API keys or other secrets in client-side code. Configure them as Cloudflare Worker/server secrets when the backend is chosen.
+- [x] Keep Apps Script, Brevo, and Slack credentials server-side in Cloudflare Pages bindings; never expose them to client-side code.
+- [ ] Approve and publish the privacy notice covering the temporary Sheet, Brevo, Slack, access, and retention before activating intake.
+- [ ] Decide whether photos will use signed Cloudinary uploads or remain on WhatsApp until the main backend is ready.
 
 ## Current website behavior
 
-The repair form is a non-persistent prototype. It does not send form values or photos to Fixxir. The page now discloses this before data entry and sends customers to direct contact instead of displaying a fabricated request ID or fake tracking link. The email confirmation system is not implemented yet.
+The form and Cloudflare Pages Function now support a persisted request reference and a Fixxir-branded Brevo receipt, but public intake remains disabled until the existing Apps Script contract, Cloudflare secrets, sender authentication, and approved privacy notice are in place. Photo uploads are not supported; customers are directed to WhatsApp for photos.

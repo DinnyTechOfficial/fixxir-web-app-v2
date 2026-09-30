@@ -10,7 +10,6 @@ import {
   Laptop,
   Search,
   Smartphone,
-  Upload,
 } from "lucide-react";
 import {
   searchBrands,
@@ -52,7 +51,6 @@ interface RepairFormData {
 interface Step2Data {
   issue?: string;
   details?: string;
-  photos?: File[];
 }
 
 interface Step3Data {
@@ -319,40 +317,16 @@ function Step2Problem({ data, onNext, onPrev, onChange }: StepNavigationProps) {
         />
       </div>
 
-      {/* Photo Upload */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
-          Photos (up to 3, optional)
-        </label>
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-          <Upload className="mx-auto mb-2 text-gray-400" size={32} aria-hidden="true" />
-          <p className="text-sm text-gray-600">Click to upload or drag photos here</p>
-          <input
-            type="file"
-            multiple
-            accept="image/*"
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []).slice(0, 3);
-              setStep2Data({ ...step2Data, photos: files });
-            }}
-            className="hidden"
-            id="photo-upload"
-            aria-label="Upload device photos"
-          />
-          <label htmlFor="photo-upload" className="block cursor-pointer">
-            <button
-              onClick={() => document.getElementById("photo-upload")?.click()}
-              className="mt-2 text-blue-600 font-semibold text-sm hover:underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 rounded"
-            >
-              Select photos
-            </button>
-          </label>
-        </div>
-        {step2Data.photos && (
-          <p className="text-sm text-gray-600 mt-2" role="status">
-            {step2Data.photos.length} photo{step2Data.photos.length !== 1 ? "s" : ""} selected
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm text-gray-700">
+            Want to share photos of the issue? Send them to Fixxir on{" "}
+            <a href={getFixxirWhatsAppUrl()} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline">
+              WhatsApp
+            </a>
+            . Photo uploads through this form are not available yet.
           </p>
-        )}
+        </div>
       </div>
 
       <div className="flex gap-3">
@@ -378,11 +352,16 @@ function Step3CustomerInfo({ data, onNext, onPrev, onChange }: StepNavigationPro
   const [step3Data, setStep3Data] = useState(data?.step3 || {});
 
   const handleNext = () => {
-    if (!step3Data.name || !step3Data.phone) {
+    const email = step3Data.email?.trim() || "";
+    if (!step3Data.name?.trim() || !step3Data.phone?.trim()) {
       alert("Please fill in name and phone number");
       return;
     }
-    onChange({ ...data, step3: step3Data });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      alert("Please enter a valid email address");
+      return;
+    }
+    onChange({ ...data, step3: { ...step3Data, email } });
     onNext();
   };
 
@@ -414,9 +393,12 @@ function Step3CustomerInfo({ data, onNext, onPrev, onChange }: StepNavigationPro
       </div>
 
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Email (optional)</label>
+        <label htmlFor="repair-email" className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
         <input
+          id="repair-email"
           type="email"
+          required
+          autoComplete="email"
           value={step3Data.email || ""}
           onChange={(e) => setStep3Data({ ...step3Data, email: e.target.value })}
           placeholder="your.email@example.com"
@@ -599,9 +581,12 @@ interface ReviewProps {
   data: RepairFormData;
   onSubmit: () => void;
   onPrev: () => void;
+  isSubmitting: boolean;
+  isIntakeEnabled: boolean;
+  submissionError: string;
 }
 
-function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
+function Step6Review({ data, onSubmit, onPrev, isSubmitting, isIntakeEnabled, submissionError }: ReviewProps) {
   const handleSubmit = () => {
     onSubmit();
   };
@@ -650,6 +635,8 @@ function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
         </p>
       </div>
 
+      {submissionError && <p className="text-sm font-medium text-red-700" role="alert">{submissionError}</p>}
+
       <div className="flex gap-3">
         <button
           onClick={onPrev}
@@ -658,10 +645,12 @@ function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
           <ChevronLeft size={20} /> Back
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
-          className="flex-1 bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition"
+          disabled={!isIntakeEnabled || isSubmitting}
+          className="flex-1 rounded-lg bg-green-600 py-3 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
-          Continue to contact Fixxir
+          {isSubmitting ? "Submitting request..." : "Submit repair request"}
         </button>
       </div>
     </div>
@@ -673,8 +662,34 @@ export default function RepairRequestForm() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<RepairFormData>({});
+  const [isIntakeEnabled, setIsIntakeEnabled] = useState(false);
+  const [privacyNoticeUrl, setPrivacyNoticeUrl] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
+  const submissionId = useRef<string | null>(null);
 
   const totalSteps = 6;
+
+  useEffect(() => {
+    let isCurrent = true;
+    fetch("/api/repair-requests", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ enabled?: boolean; privacyNoticeUrl?: string | null }>;
+      })
+      .then((status) => {
+        if (!isCurrent || !status) return;
+        setIsIntakeEnabled(status.enabled === true);
+        setPrivacyNoticeUrl(status.privacyNoticeUrl || null);
+      })
+      .catch(() => {
+        if (isCurrent) setIsIntakeEnabled(false);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
@@ -690,18 +705,51 @@ export default function RepairRequestForm() {
     }
   };
 
-  const handleSubmit = () => {
-    // Navigate to success page
-    router.push("/repair/request/success");
+  const handleSubmit = async () => {
+    if (!isIntakeEnabled || isSubmitting) return;
+    setSubmissionError("");
+    setIsSubmitting(true);
+
+    try {
+      submissionId.current ||= crypto.randomUUID();
+      const response = await fetch("/api/repair-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionId: submissionId.current, data: formData }),
+      });
+      const result = await response.json() as {
+        success?: boolean;
+        requestId?: string;
+        emailAccepted?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || result.success !== true || !result.requestId) {
+        throw new Error(result.error || "We could not submit your request. Please try again.");
+      }
+
+      router.push(`/repair/request/success?requestId=${encodeURIComponent(result.requestId)}&emailAccepted=${result.emailAccepted ? "1" : "0"}`);
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "We could not submit your request. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-linear-to-b from-gray-50 to-white py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
-        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" role="status">
-          Online repair requests are not active yet. Details entered here are not sent or saved.
-          Contact Fixxir by WhatsApp or phone instead. Support hours: {FIXXIR_SUPPORT_HOURS}.
-        </div>
+        {isIntakeEnabled ? (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-800" role="status">
+            Your details will be used to manage this repair request. Review our{" "}
+            {privacyNoticeUrl ? <a href={privacyNoticeUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline">privacy notice</a> : "privacy notice"} before submitting.
+          </div>
+        ) : (
+          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" role="status">
+            Online repair requests are not active yet. Details entered here are not sent or saved.
+            Contact Fixxir by WhatsApp or phone instead. Support hours: {FIXXIR_SUPPORT_HOURS}.
+          </div>
+        )}
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex justify-between text-xs font-semibold text-gray-600 mb-3">
@@ -723,7 +771,7 @@ export default function RepairRequestForm() {
           {currentStep === 3 && <Step3CustomerInfo data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
           {currentStep === 4 && <Step4Location data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
           {currentStep === 5 && <Step5Timing data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
-          {currentStep === 6 && <Step6Review data={formData} onSubmit={handleSubmit} onPrev={handlePrev} />}
+          {currentStep === 6 && <Step6Review data={formData} onSubmit={handleSubmit} onPrev={handlePrev} isSubmitting={isSubmitting} isIntakeEnabled={isIntakeEnabled} submissionError={submissionError} />}
         </div>
 
         {/* Help Text */}

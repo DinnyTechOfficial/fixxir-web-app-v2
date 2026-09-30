@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
+import { CheckCircle2, MessageCircle } from "lucide-react";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   FIXXIR_BUSINESS_ADDRESS,
   FIXXIR_PHONE_DISPLAY,
@@ -10,21 +14,44 @@ import {
 
 export default function RepairRequestSuccess() {
   return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-gray-600">Checking request confirmation...</div>}>
+      <RepairRequestSuccessContent />
+    </Suspense>
+  );
+}
+
+function RepairRequestSuccessContent() {
+  const searchParams = useSearchParams();
+  const requestId = searchParams.get("requestId");
+  const emailAccepted = searchParams.get("emailAccepted") === "1";
+
+  return (
     <div className="min-h-screen bg-linear-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8 flex items-center">
       <div className="max-w-2xl mx-auto text-center">
         <div className="mb-6">
-          <MessageCircle className="w-16 h-16 text-green-600 mx-auto" />
+          {requestId ? <CheckCircle2 className="mx-auto h-16 w-16 text-green-600" /> : <MessageCircle className="mx-auto h-16 w-16 text-blue-600" />}
         </div>
 
         <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-          One last step to contact Fixxir.
+          {requestId ? "Your repair request has been received." : "No request to confirm yet."}
         </h1>
 
         <div className="bg-white rounded-lg border-2 border-green-200 p-8 mb-8">
-          <p className="text-gray-700">
-            This website does not yet send or save repair requests. Contact Fixxir directly on WhatsApp to
-            request a repair. Your details from the form have not been sent.
-          </p>
+          {requestId ? (
+            <div className="space-y-3 text-gray-700">
+              <p>Our team will review the details and contact you to confirm the next step.</p>
+              <p className="font-semibold">Request reference: <span className="text-blue-700">{requestId}</span></p>
+              <p role="status">
+                {emailAccepted
+                  ? "The confirmation email was accepted for sending to the address you provided. Check your inbox and spam folder."
+                  : "Your request was saved, but the confirmation email could not be queued. Please contact Fixxir if you need the details resent."}
+              </p>
+            </div>
+          ) : (
+            <p className="text-gray-700">
+              This page only confirms a request after successful submission. Start a repair request or contact Fixxir directly.
+            </p>
+          )}
         </div>
 
         <p className="text-lg text-gray-700 mb-8">
@@ -34,12 +61,12 @@ export default function RepairRequestSuccess() {
 
         <div className="mb-8">
           <a
-            href={getFixxirWhatsAppUrl("Hi Fixxir, I'd like to request a device repair.")}
+            href={getFixxirWhatsAppUrl(requestId ? `Hi Fixxir, I have a question about repair request ${requestId}.` : "Hi Fixxir, I'd like to request a device repair.")}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-12 items-center justify-center bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition"
           >
-            Contact Fixxir on WhatsApp
+            {requestId ? "Ask Fixxir about this request" : "Contact Fixxir on WhatsApp"}
           </a>
           <p className="mt-3 text-sm text-gray-600">{FIXXIR_PHONE_DISPLAY}</p>
         </div>

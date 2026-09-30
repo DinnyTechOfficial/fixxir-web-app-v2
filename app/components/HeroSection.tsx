@@ -6,14 +6,18 @@ export default function HeroSection() {
     <section
       id="top"
       className="relative isolate overflow-hidden border-b border-[#dce5f1] px-5 py-16 sm:px-8 sm:py-24 lg:py-20"
-      style={{
-        backgroundImage:
-          "linear-gradient(90deg, rgba(247,249,252,0.9) 0%, rgba(236,242,249,0.8) 42%, rgba(236,242,249,0.2) 50%), url('/images/fixxir-hero-landing.webp')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_35%)]" />
+      <div
+        aria-hidden="true"
+        className="absolute -inset-3 bg-cover bg-center opacity-60 blur-sm sm:inset-0 sm:opacity-100 sm:blur-0"
+        style={{
+          backgroundImage: "url('/images/fixxir-hero-landing.webp')",
+          backgroundPosition: "65% center",
+        }}
+      />
+      <div className="absolute inset-0 bg-[#f7f9fc]/55 sm:hidden" />
+      <div className="absolute inset-0 hidden bg-[linear-gradient(90deg,rgba(247,249,252,0.96)_0%,rgba(236,242,249,0.88)_42%,rgba(236,242,249,0.16)_72%)] sm:block" />
+      <div className="absolute inset-0 hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_35%)] sm:block" />
 
       <div className="relative z-10 mx-auto max-w-6xl">
         <div className="max-w-[640px]">
@@ -29,7 +33,7 @@ export default function HeroSection() {
             checks.
           </p>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <div id="hero-actions" className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
               href="/repair/request"
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#1769e0] px-6 font-bold text-white shadow-[0_12px_24px_rgba(23,105,224,0.23)] transition hover:bg-[#0d4db4]"

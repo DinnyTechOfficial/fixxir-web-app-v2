@@ -18,11 +18,63 @@ import {
   FIXXIR_SUPPORT_HOURS,
   getFixxirWhatsAppUrl,
 } from "./site-info";
-import { useState } from "react";
-import { ArrowRight, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Menu, X } from "lucide-react";
 
 export default function Home() {
-  const [showMobileCTA, setShowMobileCTA] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [areHeroActionsVisible, setAreHeroActionsVisible] = useState(true);
+  const [isMobileCTAHidden, setIsMobileCTAHidden] = useState(false);
+  const closeMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuRef = useRef<HTMLElement>(null);
+  const showMobileCTA = !areHeroActionsVisible && !isMobileCTAHidden;
+
+  useEffect(() => {
+    const heroActions = document.getElementById("hero-actions");
+    if (!heroActions) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setAreHeroActionsVisible(entry.isIntersecting);
+    });
+    observer.observe(heroActions);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeMenuButtonRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMobileMenuOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", closeOnEscape);
+      previouslyFocused?.focus();
+    };
+  }, [isMobileMenuOpen]);
+
+  const trapMenuFocus = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab" || !mobileMenuRef.current) return;
+    const focusable = Array.from(
+      mobileMenuRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled])"),
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  };
 
   return (
     <div className="bg-[#f7f9fc] text-[#10213f]">
@@ -40,30 +92,85 @@ export default function Home() {
             <a href="#faq" className="transition hover:text-[#1769e0]">FAQ</a>
           </nav>
           <div className="flex items-center gap-2">
-            <a href="#contact" className="hidden px-3 py-2 text-sm font-semibold text-[#61708a] sm:block">Contact</a>
-            <a href="/repair/request" className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#1769e0] px-4 text-sm font-bold text-white shadow-[0_8px_20px_rgba(23,105,224,0.2)] transition hover:bg-[#0d4db4]">
-              Start a repair <ArrowRight size={16} />
-            </a>
+            <a href="#contact" className="hidden px-3 py-2 text-sm font-semibold text-[#61708a] lg:block">Contact</a>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-site-menu"
+              aria-label="Open site menu"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#dce5f1] text-[#10213f] transition hover:bg-white lg:hidden"
+            >
+              <Menu size={21} />
+            </button>
           </div>
         </div>
       </header>
-      {/* Sticky mobile CTA bar */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close site menu"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="absolute inset-0 h-full w-full bg-[#10213f]/45"
+          />
+          <aside
+            id="mobile-site-menu"
+            ref={mobileMenuRef}
+            onKeyDown={trapMenuFocus}
+            className="absolute inset-y-0 right-0 flex w-[min(88vw,360px)] flex-col border-l border-[#dce5f1] bg-[#f7f9fc] p-5 shadow-2xl"
+          >
+            <div className="mb-8 flex items-center justify-between">
+              <a href="#top" onClick={() => setIsMobileMenuOpen(false)} className="inline-flex items-center gap-2 text-xl font-black text-[#10213f]">
+                <Image src="/logo/fixxir-mark.png" alt="" width={32} height={32} unoptimized />
+                <span>fixxir<span className="text-[#1769e0]">.</span></span>
+              </a>
+              <button
+                ref={closeMenuButtonRef}
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                aria-label="Close site menu"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[#52627b] hover:bg-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <nav aria-label="Mobile navigation" className="flex flex-col gap-1 text-base font-semibold text-[#33445f]">
+              <a onClick={() => setIsMobileMenuOpen(false)} href="#how-it-works" className="rounded-lg px-3 py-3 hover:bg-white">How it works</a>
+              <a onClick={() => setIsMobileMenuOpen(false)} href="#services" className="rounded-lg px-3 py-3 hover:bg-white">Services</a>
+              <a onClick={() => setIsMobileMenuOpen(false)} href="#why-fixxir" className="rounded-lg px-3 py-3 hover:bg-white">Why Fixxir</a>
+              <a onClick={() => setIsMobileMenuOpen(false)} href="#business" className="rounded-lg px-3 py-3 hover:bg-white">For business</a>
+              <a onClick={() => setIsMobileMenuOpen(false)} href="#faq" className="rounded-lg px-3 py-3 hover:bg-white">FAQ</a>
+              <a onClick={() => setIsMobileMenuOpen(false)} href="#contact" className="rounded-lg px-3 py-3 hover:bg-white">Contact</a>
+            </nav>
+            <a
+              href="/repair/request"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="mt-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#1769e0] px-5 font-bold text-white shadow-[0_8px_20px_rgba(23,105,224,0.2)] transition hover:bg-[#0d4db4]"
+            >
+              Start a repair <ArrowRight size={17} />
+            </a>
+          </aside>
+        </div>
+      )}
+      {/* Quick actions appear after the hero actions scroll out of view. */}
       {showMobileCTA && (
-        <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-blue-600 text-white p-4 shadow-lg z-40">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#dce5f1] bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-[#10213f] shadow-[0_-8px_24px_rgba(16,33,63,0.12)] backdrop-blur sm:hidden">
           <div className="flex gap-3">
-            <a href={getFixxirWhatsAppUrl("Hi Fixxir, I need device repair help")} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/40 px-3 text-sm font-bold text-white">
+            <a href={getFixxirWhatsAppUrl("Hi Fixxir, I need device repair help")} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-[#c7d5e7] px-3 text-sm font-bold text-[#10213f]">
               WhatsApp
             </a>
             <a
               href="/repair/request"
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-white px-3 text-sm font-bold text-[#1769e0]"
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#1769e0] px-3 text-sm font-bold text-white"
             >
               Start a repair
             </a>
             <button
-              onClick={() => setShowMobileCTA(false)}
-              aria-label="Dismiss mobile actions"
-              className="px-2 text-white"
+              onClick={() => setIsMobileCTAHidden(true)}
+              aria-label="Hide quick actions"
+              title="Hide quick actions"
+              className="inline-flex w-10 items-center justify-center rounded-lg text-[#52627b] hover:bg-[#eef4fc]"
             >
               <X size={20} />
             </button>
@@ -72,7 +179,7 @@ export default function Home() {
       )}
 
       {/* Main content with padding for sticky bar on mobile */}
-      <div className={showMobileCTA ? "pb-20 sm:pb-0" : ""}>
+      <div className="pb-20 sm:pb-0">
         <HeroSection />
         <TrustSignals />
         <ProblemDifferentiation />

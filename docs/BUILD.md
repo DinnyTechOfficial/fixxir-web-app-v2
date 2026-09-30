@@ -25,13 +25,13 @@ Working through decisions needed before building.
 
 - ✅ Stack: Next.js 14+ TypeScript
 - ✅ Deployment: Cloudflare Pages (static export)
-- ⏳ Backend: Not implemented; choose request storage and email/notification delivery
+- ⏳ Backend: Temporary Cloudflare Pages Function contract is implemented; connect and verify the Apps Script Sheet endpoint before launch
 - ⏳ Payment provider: confirm provider/account before publishing payment claims
 - ⏳ WhatsApp: Direct contact links are configured; automated integration is not implemented
 - ⏳ Admin: Confirm the operational system for receiving and managing repair requests
 - ⏳ Analytics: Provider and event collection need confirmation
 - ✅ Services: Phones + laptops only (no tablets/accessories)
-- ⏳ Request ID: Generate only after a request is successfully persisted
+- ⏳ Request ID: Success flow now requires an ID returned after persistence; Apps Script must provide and deduplicate it
 - ⏸️ Launch 100: Paused until eligibility and credit terms are approved
 
 ---

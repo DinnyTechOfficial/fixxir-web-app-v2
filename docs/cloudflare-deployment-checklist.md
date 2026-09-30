@@ -24,10 +24,23 @@ This checklist is for deploying the current Next.js app as a static site on Clou
 
 ## Current functional limits
 
-- The repair form keeps values in browser memory only; it does not send or save repair requests. Visitors are directed to contact Fixxir instead.
-- The confirmation route contains no generated request ID because request persistence is not implemented.
-- Photo selections are not uploaded or persisted.
-- Static export does not run Next.js SSR, API routes, or server actions. Add a separate backend/API or migrate to a server-capable Cloudflare Workers setup when those features are implemented.
+- The static export does not provide dynamic Next.js API routes. Repair submissions use the root-level Cloudflare Pages Function in `functions/api/repair-requests.ts`.
+- Intake is fail-closed. It remains disabled unless the server-side bindings and `REPAIR_INTAKE_ENABLED=true` are configured; a published HTTPS privacy notice URL is also required.
+- The Apps Script endpoint must return a persisted request ID and enforce idempotency for repeated `submissionId` values. See `repair-intake-integration.md` before deploying the script or enabling intake.
+- Brevo sends the receipt after the Sheet write. If email delivery fails after persistence, the page still confirms the saved request and discloses the email failure. Slack alerts are best-effort.
+- Photo upload is not implemented. The form directs customers to WhatsApp for photos until a signed Cloudinary or backend upload flow is ready.
+
+## Pages Function configuration
+
+Configure these as Cloudflare Pages server-side variables/secrets, not `NEXT_PUBLIC_*` values:
+
+- `REPAIR_INTAKE_ENABLED` — keep `false` until integration and privacy checks are complete; set to `true` only for an intentional launch.
+- `REPAIR_PRIVACY_NOTICE_URL` — published HTTPS privacy notice covering intake data and processors.
+- `APPS_SCRIPT_URL` and `APPS_SCRIPT_TOKEN` — deployed Apps Script web app URL and shared secret.
+- `BREVO_API_KEY` — server-side Brevo API key with transactional sending enabled.
+- `SLACK_WEBHOOK_URL` — optional incoming webhook for minimal request alerts.
+
+The sender and reply-to are currently `no-reply@fixxir.com` and `info@fixxir.com`. Verify the sender with Brevo and configure SPF, DKIM, and DMARC before enabling receipts. `next dev` alone does not execute this function; use the Cloudflare Pages local runtime to test it.
 
 ## If changing to the default `out` directory
 
