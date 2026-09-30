@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeft,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -209,6 +211,13 @@ function Step1Device({ data, onNext, onChange }: Step1Props) {
 
   return (
     <div className="space-y-7">
+      <Link
+        href="/"
+        className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-gray-600 transition hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+      >
+        <ArrowLeft size={17} aria-hidden="true" />
+        Back to home
+      </Link>
       <div><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Step 1 of 6</p><h2 className="text-2xl font-bold text-gray-900 sm:text-3xl">What do you need repaired?</h2><p className="mt-2 text-sm text-gray-600">Search for your device. If you cannot find it, you can enter it yourself.</p></div>
 
       <div>
