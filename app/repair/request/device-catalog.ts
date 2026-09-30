@@ -1,3 +1,5 @@
+import { supplementalModelNames } from "./device-model-additions";
+
 export type DeviceType = "phone" | "laptop";
 
 export interface DeviceBrand {
@@ -78,7 +80,21 @@ export const searchModels = (deviceType: DeviceType, brandId: string, query: str
   const normalizedQuery = normalizeSearchTerm(query);
   const brand = seeds.find((item) => item.deviceType === deviceType && item.id === brandId);
   if (!brand) return [];
-  return brand.models
+  const seenNames = new Set<string>();
+  const supplementalModels = (supplementalModelNames[brand.id] || []).map((name) => ({
+    id: name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+    name,
+    aliases: [],
+    popularityScore: 45,
+  }));
+
+  return [...brand.models, ...supplementalModels]
+    .filter((model) => {
+      const normalizedName = normalizeSearchTerm(model.name);
+      if (seenNames.has(normalizedName)) return false;
+      seenNames.add(normalizedName);
+      return true;
+    })
     .map((model) => ({ ...model, brandId: brand.id, brandName: brand.name }))
     .filter((model) => !normalizedQuery || normalizeSearchTerm([model.name, ...model.aliases, brand.name].join(" ")).includes(normalizedQuery))
     .sort((a, b) => b.popularityScore - a.popularityScore)
