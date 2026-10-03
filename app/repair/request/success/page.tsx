@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -24,20 +24,33 @@ function RepairRequestSuccessContent() {
   const searchParams = useSearchParams();
   const requestId = searchParams.get("requestId");
   const emailAccepted = searchParams.get("emailAccepted") === "1";
+  const viaWhatsApp = searchParams.get("via") === "whatsapp";
 
   return (
     <div className="min-h-screen bg-linear-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8 flex items-center">
       <div className="max-w-2xl mx-auto text-center">
         <div className="mb-6">
-          {requestId ? <CheckCircle2 className="mx-auto h-16 w-16 text-green-600" /> : <MessageCircle className="mx-auto h-16 w-16 text-blue-600" />}
+          <MessageCircle className="mx-auto h-16 w-16 text-green-600" />
         </div>
 
         <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-          {requestId ? "Your repair request has been received." : "No request to confirm yet."}
+          {viaWhatsApp
+            ? "Your request is ready to send."
+            : requestId
+              ? "Your repair request has been received."
+              : "No request to confirm yet."}
         </h1>
 
         <div className="bg-white rounded-lg border-2 border-green-200 p-8 mb-8">
-          {requestId ? (
+          {viaWhatsApp ? (
+            <div className="space-y-3 text-gray-700">
+              <p>
+                WhatsApp should have opened with your repair request filled in.
+                Tap <strong>send</strong> in the chat so Fixxir receives your details.
+              </p>
+              <p>If WhatsApp did not open, use the button below to try again.</p>
+            </div>
+          ) : requestId ? (
             <div className="space-y-3 text-gray-700">
               <p>Our team will review the details and contact you to confirm the next step.</p>
               <p className="font-semibold">Request reference: <span className="text-blue-700">{requestId}</span></p>

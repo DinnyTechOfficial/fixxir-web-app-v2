@@ -590,12 +590,9 @@ interface ReviewProps {
   data: RepairFormData;
   onSubmit: () => void;
   onPrev: () => void;
-  isSubmitting: boolean;
-  isIntakeEnabled: boolean;
-  submissionError: string;
 }
 
-function Step6Review({ data, onSubmit, onPrev, isSubmitting, isIntakeEnabled, submissionError }: ReviewProps) {
+function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
   const handleSubmit = () => {
     onSubmit();
   };
@@ -644,8 +641,6 @@ function Step6Review({ data, onSubmit, onPrev, isSubmitting, isIntakeEnabled, su
         </p>
       </div>
 
-      {submissionError && <p className="text-sm font-medium text-red-700" role="alert">{submissionError}</p>}
-
       <div className="flex gap-3">
         <button
           onClick={onPrev}
@@ -656,10 +651,9 @@ function Step6Review({ data, onSubmit, onPrev, isSubmitting, isIntakeEnabled, su
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!isIntakeEnabled || isSubmitting}
-          className="flex-1 rounded-lg bg-green-600 py-3 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+          className="flex-1 rounded-lg bg-green-600 py-3 font-semibold text-white transition hover:bg-green-700"
         >
-          {isSubmitting ? "Submitting request..." : "Submit repair request"}
+          Send request via WhatsApp
         </button>
       </div>
     </div>
@@ -671,34 +665,8 @@ export default function RepairRequestForm() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<RepairFormData>({});
-  const [isIntakeEnabled, setIsIntakeEnabled] = useState(false);
-  const [privacyNoticeUrl, setPrivacyNoticeUrl] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionError, setSubmissionError] = useState("");
-  const submissionId = useRef<string | null>(null);
 
   const totalSteps = 6;
-
-  useEffect(() => {
-    let isCurrent = true;
-    fetch("/api/repair-requests", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json() as Promise<{ enabled?: boolean; privacyNoticeUrl?: string | null }>;
-      })
-      .then((status) => {
-        if (!isCurrent || !status) return;
-        setIsIntakeEnabled(status.enabled === true);
-        setPrivacyNoticeUrl(status.privacyNoticeUrl || null);
-      })
-      .catch(() => {
-        if (isCurrent) setIsIntakeEnabled(false);
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
@@ -714,51 +682,56 @@ export default function RepairRequestForm() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!isIntakeEnabled || isSubmitting) return;
-    setSubmissionError("");
-    setIsSubmitting(true);
+  const buildWhatsAppMessage = () => {
+    const deviceType = formData.step1?.deviceType === "phone" ? "Phone" : "Laptop";
+    const brand = formData.step1?.brand?.name || "Not specified";
+    const model = formData.step1?.modelUnknown ? "Not sure" : formData.step1?.model?.name || "Not specified";
+    const lines = [
+      "Hi Fixxir, I'd like to request a repair.",
+      "",
+      `Device: ${deviceType}`,
+      `Brand: ${brand}`,
+      `Model: ${model}`,
+      `Issue: ${formData.step2?.issue || "Not specified"}`,
+    ];
+    if (formData.step2?.details?.trim()) lines.push(`Details: ${formData.step2.details.trim()}`);
+    lines.push(
+      "",
+      `Name: ${formData.step3?.name || ""}`,
+      `Phone: ${formData.step3?.phone || ""}`,
+      `Email: ${formData.step3?.email || ""}`,
+      "",
+      `Area: ${formData.step4?.area || ""}`,
+    );
+    if (formData.step4?.address?.trim()) lines.push(`Address: ${formData.step4.address.trim()}`);
+    const handoffLabels: Record<string, string> = {
+      pickup: "Pickup — ask Fixxir to confirm availability",
+      dropoff: "Drop-off — contact Fixxir first",
+      advise: "Let Fixxir advise me",
+    };
+    const urgencyLabels: Record<string, string> = {
+      asap: "As soon as possible",
+      "1-2days": "Within 1–2 days",
+      week: "This week",
+      nourgency: "No urgent deadline",
+    };
+    lines.push(
+      `Handoff: ${handoffLabels[formData.step4?.handoff || ""] || formData.step4?.handoff || "Not specified"}`,
+      "",
+      `Timing: ${urgencyLabels[formData.step5?.urgency || ""] || formData.step5?.urgency || "Not specified"}`,
+    );
+    return lines.join("\n");
+  };
 
-    try {
-      submissionId.current ||= crypto.randomUUID();
-      const response = await fetch("/api/repair-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ submissionId: submissionId.current, data: formData }),
-      });
-      const result = await response.json() as {
-        success?: boolean;
-        requestId?: string;
-        emailAccepted?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || result.success !== true || !result.requestId) {
-        throw new Error(result.error || "We could not submit your request. Please try again.");
-      }
-
-      router.push(`/repair/request/success?requestId=${encodeURIComponent(result.requestId)}&emailAccepted=${result.emailAccepted ? "1" : "0"}`);
-    } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : "We could not submit your request. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = () => {
+    const url = getFixxirWhatsAppUrl(buildWhatsAppMessage());
+    window.open(url, "_blank", "noopener,noreferrer");
+    router.push("/repair/request/success?via=whatsapp");
   };
 
   return (
     <div className="min-h-screen bg-linear-to-b from-gray-50 to-white py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
-        {isIntakeEnabled ? (
-          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-800" role="status">
-            Your details will be used to manage this repair request. Review our{" "}
-            {privacyNoticeUrl ? <a href={privacyNoticeUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline">privacy notice</a> : "privacy notice"} before submitting.
-          </div>
-        ) : (
-          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" role="status">
-            Online repair requests are not active yet. Details entered here are not sent or saved.
-            Contact Fixxir by WhatsApp or phone instead. Support hours: {FIXXIR_SUPPORT_HOURS}.
-          </div>
-        )}
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex justify-between text-xs font-semibold text-gray-600 mb-3">
@@ -780,7 +753,7 @@ export default function RepairRequestForm() {
           {currentStep === 3 && <Step3CustomerInfo data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
           {currentStep === 4 && <Step4Location data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
           {currentStep === 5 && <Step5Timing data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
-          {currentStep === 6 && <Step6Review data={formData} onSubmit={handleSubmit} onPrev={handlePrev} isSubmitting={isSubmitting} isIntakeEnabled={isIntakeEnabled} submissionError={submissionError} />}
+          {currentStep === 6 && <Step6Review data={formData} onSubmit={handleSubmit} onPrev={handlePrev} />}
         </div>
 
         {/* Help Text */}
