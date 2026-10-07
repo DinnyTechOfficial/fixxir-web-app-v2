@@ -5,13 +5,27 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  BatteryLow,
+  Bug,
+  CameraOff,
   Check,
   ChevronLeft,
   ChevronRight,
+  Droplets,
+  Keyboard,
   Loader2,
   Laptop,
+  MemoryStick,
+  MicOff,
+  MonitorOff,
+  PlugZap,
+  PowerOff,
   Search,
   Smartphone,
+  Turtle,
+  Wrench,
+  X,
+  type LucideIcon,
 } from "lucide-react";
 import {
   searchBrands,
@@ -51,7 +65,7 @@ interface RepairFormData {
 }
 
 interface Step2Data {
-  issue?: string;
+  issues?: string[];
   details?: string;
 }
 
@@ -125,6 +139,22 @@ function Step1Device({ data, onNext, onChange }: Step1Props) {
   }, [modelQuery, step1Data.brand, step1Data.deviceType]);
 
   const updateStep1 = (next: DeviceStepData) => setStep1Data(next);
+
+  const clearBrandSearch = () => {
+    setBrandLoading(true);
+    setBrandQuery("");
+    setBrandOpen(true);
+    updateStep1({ deviceType: step1Data.deviceType, brand: undefined, model: null, modelUnknown: false });
+    brandInputRef.current?.focus();
+  };
+
+  const clearModelSearch = () => {
+    setModelLoading(true);
+    setModelQuery("");
+    setModelOpen(true);
+    updateStep1({ ...step1Data, model: null, modelUnknown: false });
+    modelInputRef.current?.focus();
+  };
 
   const selectType = (deviceType: DeviceType) => {
     updateStep1({ deviceType });
@@ -234,14 +264,14 @@ function Step1Device({ data, onNext, onChange }: Step1Props) {
       {step1Data.deviceType && <div className="space-y-7">
         <div className="relative">
           <label htmlFor="brand-search" className="mb-2 block text-sm font-semibold text-gray-700">Brand *</label>
-          <div className="relative"><Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input ref={brandInputRef} id="brand-search" role="combobox" aria-expanded={brandOpen} aria-controls="brand-results" aria-autocomplete="list" value={brandQuery} onFocus={() => setBrandOpen(true)} onChange={(event) => { setBrandLoading(true); setBrandQuery(event.target.value); setBrandOpen(true); updateStep1({ ...step1Data, brand: undefined, model: null, modelUnknown: false }); }} onKeyDown={(event) => handleInputKeyDown(event, "brand")} placeholder={step1Data.deviceType === "phone" ? "Search phone brand" : "Search laptop brand"} className="min-h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-10 outline-none transition focus:border-blue-600" />{brandLoading && <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-blue-600" />}{step1Data.brand && !brandOpen && <Check size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600" />}</div>
+          <div className="relative"><Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input ref={brandInputRef} id="brand-search" role="combobox" aria-expanded={brandOpen} aria-controls="brand-results" aria-autocomplete="list" value={brandQuery} onFocus={() => setBrandOpen(true)} onChange={(event) => { setBrandLoading(true); setBrandQuery(event.target.value); setBrandOpen(true); updateStep1({ ...step1Data, brand: undefined, model: null, modelUnknown: false }); }} onKeyDown={(event) => handleInputKeyDown(event, "brand")} placeholder={step1Data.deviceType === "phone" ? "Search phone brand" : "Search laptop brand"} className="min-h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-20 outline-none transition focus:border-blue-600" />{brandLoading && <Loader2 size={18} className="absolute right-12 top-1/2 -translate-y-1/2 animate-spin text-blue-600" />}{brandOpen && brandQuery.trim() && <button type="button" onClick={clearBrandSearch} aria-label="Clear brand search" title="Clear search" className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"><X size={18} aria-hidden="true" /></button>}{step1Data.brand && !brandOpen && <Check size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600" />}</div>
           {brandOpen && <div id="brand-results" role="listbox" className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-lg">{brandResults.map((brand, index) => <button type="button" role="option" aria-selected={step1Data.brand?.id === brand.id} id={`brand-option-${index}`} key={brand.id} onClick={() => selectBrand(brand)} className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm font-medium text-gray-800 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none">{brand.name}</button>)}{brandQuery.trim() && brandResults.length === 0 && !brandLoading && <p className="px-3 py-3 text-sm text-gray-500">No matching brand found.</p>}{brandQuery.trim() && <button type="button" onClick={applyCustomBrand} className="mt-1 flex min-h-11 w-full items-center rounded-lg border-t border-gray-100 px-3 text-left text-sm font-semibold text-blue-600 hover:bg-blue-50">Use “{brandQuery.trim()}” as brand</button>}</div>}
           {errors.brand && <p className="mt-2 text-sm text-red-600" role="alert">{errors.brand}</p>}
         </div>
 
         {step1Data.brand && <div className="relative">
           <label htmlFor="model-search" className="mb-2 block text-sm font-semibold text-gray-700">Model *</label>
-          <div className="relative"><Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input ref={modelInputRef} id="model-search" role="combobox" aria-expanded={modelOpen} aria-controls="model-results" aria-autocomplete="list" value={modelQuery} onFocus={() => setModelOpen(true)} onChange={(event) => { setModelLoading(true); setModelQuery(event.target.value); setModelOpen(true); updateStep1({ ...step1Data, model: null, modelUnknown: false }); }} onKeyDown={(event) => handleInputKeyDown(event, "model")} placeholder="Search your model" className="min-h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-10 outline-none transition focus:border-blue-600" />{modelLoading && <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-blue-600" />}{(step1Data.model || step1Data.modelUnknown) && !modelOpen && <Check size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600" />}</div>
+          <div className="relative"><Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input ref={modelInputRef} id="model-search" role="combobox" aria-expanded={modelOpen} aria-controls="model-results" aria-autocomplete="list" value={modelQuery} onFocus={() => setModelOpen(true)} onChange={(event) => { setModelLoading(true); setModelQuery(event.target.value); setModelOpen(true); updateStep1({ ...step1Data, model: null, modelUnknown: false }); }} onKeyDown={(event) => handleInputKeyDown(event, "model")} placeholder="Search your model" className="min-h-12 w-full rounded-xl border-2 border-gray-200 bg-white pl-11 pr-20 outline-none transition focus:border-blue-600" />{modelLoading && <Loader2 size={18} className="absolute right-12 top-1/2 -translate-y-1/2 animate-spin text-blue-600" />}{modelOpen && modelQuery.trim() && <button type="button" onClick={clearModelSearch} aria-label="Clear model search" title="Clear search" className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"><X size={18} aria-hidden="true" /></button>}{(step1Data.model || step1Data.modelUnknown) && !modelOpen && <Check size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600" />}</div>
           {modelOpen && <div id="model-results" role="listbox" className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-lg">{modelResults.map((model, index) => <button type="button" role="option" aria-selected={step1Data.model?.id === model.id} id={`model-option-${index}`} key={model.id} onClick={() => selectModel(model)} className="flex min-h-14 w-full flex-col items-start justify-center rounded-lg px-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"><span className="text-sm font-semibold text-gray-900">{model.name}</span><span className="text-xs text-gray-500">{model.brandName}</span></button>)}{modelQuery.trim() && modelResults.length === 0 && !modelLoading && <p className="px-3 py-3 text-sm text-gray-500">No matching model found.</p>}{modelQuery.trim() && <button type="button" onClick={applyCustomModel} className="mt-1 flex min-h-11 w-full items-center rounded-lg border-t border-gray-100 px-3 text-left text-sm font-semibold text-blue-600 hover:bg-blue-50">Use “{modelQuery.trim()}”</button>}</div>}
           <button type="button" onClick={markUnknownModel} className="mt-3 text-sm font-semibold text-blue-600 hover:underline">Not sure which model you have? <span className="underline">I’m not sure of the model</span></button>
           {step1Data.modelUnknown && <p className="mt-2 text-sm text-gray-600">We’ll identify the exact model during diagnosis.</p>}
@@ -255,38 +285,53 @@ function Step1Device({ data, onNext, onChange }: Step1Props) {
 }
 
 // Step 2: Problem Description
+type IssueOption = { label: string; icon: LucideIcon };
+
+const phoneIssueOptions: IssueOption[] = [
+  { label: "Broken/cracked screen", icon: Smartphone },
+  { label: "Battery problem", icon: BatteryLow },
+  { label: "Charging problem", icon: PlugZap },
+  { label: "Won't power on", icon: PowerOff },
+  { label: "Camera problem", icon: CameraOff },
+  { label: "Speaker/microphone", icon: MicOff },
+  { label: "Liquid damage", icon: Droplets },
+  { label: "Software problem", icon: Bug },
+  { label: "Other", icon: Wrench },
+];
+
+const laptopIssueOptions: IssueOption[] = [
+  { label: "Broken/display problem", icon: MonitorOff },
+  { label: "Battery", icon: BatteryLow },
+  { label: "Keyboard/trackpad", icon: Keyboard },
+  { label: "Charging/power", icon: PlugZap },
+  { label: "Slow performance", icon: Turtle },
+  { label: "SSD/RAM upgrade", icon: MemoryStick },
+  { label: "Won't boot", icon: PowerOff },
+  { label: "Liquid damage", icon: Droplets },
+  { label: "Other", icon: Wrench },
+];
+
 function Step2Problem({ data, onNext, onPrev, onChange }: StepNavigationProps) {
   const [step2Data, setStep2Data] = useState(data?.step2 || {});
 
-  const phoneIssues = [
-    "Broken/cracked screen",
-    "Battery problem",
-    "Charging problem",
-    "Won't power on",
-    "Camera problem",
-    "Speaker/microphone",
-    "Liquid damage",
-    "Software problem",
-    "Other",
-  ];
+  const issueOptions = data?.step1?.deviceType === "phone" ? phoneIssueOptions : laptopIssueOptions;
+  const selectedIssues = step2Data.issues || [];
 
-  const laptopIssues = [
-    "Broken/display problem",
-    "Battery",
-    "Keyboard/trackpad",
-    "Charging/power",
-    "Slow performance",
-    "SSD/RAM upgrade",
-    "Won't boot",
-    "Liquid damage",
-    "Other",
-  ];
-
-  const issues = data?.step1?.deviceType === "phone" ? phoneIssues : laptopIssues;
+  const toggleIssue = (label: string) => {
+    setStep2Data((prev) => {
+      const current = prev.issues || [];
+      return {
+        ...prev,
+        issues: current.includes(label)
+          ? current.filter((item) => item !== label)
+          : [...current, label],
+      };
+    });
+  };
 
   const handleNext = () => {
-    if (!step2Data.issue) {
-      alert("Please select an issue");
+    if (selectedIssues.length === 0) {
+      alert("Please select at least one issue");
       return;
     }
     onChange({ ...data, step2: step2Data });
@@ -295,23 +340,37 @@ function Step2Problem({ data, onNext, onPrev, onChange }: StepNavigationProps) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">What is happening with your device?</h2>
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">What is happening with your device?</h2>
+        <p className="mt-1 text-sm text-gray-600">Select all that apply.</p>
+      </div>
 
       {/* Issue Selection */}
-      <div className="space-y-2">
-        {issues.map((issue) => (
-          <button
-            key={issue}
-            onClick={() => setStep2Data({ ...step2Data, issue })}
-            className={`w-full py-3 px-4 rounded-lg border-2 text-left font-medium transition ${
-              step2Data.issue === issue
-                ? "border-blue-600 bg-blue-50 text-blue-600"
-                : "border-gray-300 text-gray-700 hover:border-gray-400"
-            }`}
-          >
-            {issue}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {issueOptions.map(({ label, icon: Icon }) => {
+          const selected = selectedIssues.includes(label);
+          return (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => toggleIssue(label)}
+              className={`relative flex min-h-32 flex-col items-center justify-end gap-3 rounded-xl border-2 px-3 pb-4 pt-7 text-center font-medium transition ${
+                selected
+                  ? "border-blue-600 bg-blue-50 text-blue-600"
+                  : "border-gray-200 bg-white text-gray-700 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-[0_10px_24px_rgba(17,24,39,0.08)]"
+              }`}
+            >
+              {selected && (
+                <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">
+                  <Check size={12} />
+                </span>
+              )}
+              <Icon size={36} className="text-blue-600" />
+              <span className="text-sm leading-tight">{label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Additional Details */}
@@ -614,7 +673,7 @@ function Step6Review({ data, onSubmit, onPrev }: ReviewProps) {
 
         <div>
           <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Problem</p>
-          <p className="text-lg font-semibold text-gray-900">{data?.step2?.issue}</p>
+          <p className="text-lg font-semibold text-gray-900">{data?.step2?.issues?.join(", ")}</p>
         </div>
 
         <div>
@@ -692,7 +751,7 @@ export default function RepairRequestForm() {
       `Device: ${deviceType}`,
       `Brand: ${brand}`,
       `Model: ${model}`,
-      `Issue: ${formData.step2?.issue || "Not specified"}`,
+      `Issues: ${formData.step2?.issues?.join(", ") || "Not specified"}`,
     ];
     if (formData.step2?.details?.trim()) lines.push(`Details: ${formData.step2.details.trim()}`);
     lines.push(

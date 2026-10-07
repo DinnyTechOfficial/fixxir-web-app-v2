@@ -17,6 +17,9 @@ This checklist is for deploying the current Next.js app as a static site on Clou
 
 - [ ] Confirm the Cloudflare build completes and finds the `dist` output directory.
 - [ ] Open the homepage on the deployed domain.
+- [ ] Confirm `/robots.txt` allows search crawling and points to `/sitemap.xml`; confirm `/sitemap.xml` lists the canonical public pages.
+- [ ] Confirm the homepage has the expected canonical URL and a crawlable `rel="icon"` pointing to the current Fixxir logo.
+- [ ] In Google Search Console, submit the sitemap and request homepage indexing after a favicon change; Google may take time to refresh the search-result icon.
 - [ ] Open `/repair/request` directly, refresh it, and complete the form steps.
 - [ ] Open `/repair/request/success` directly and check that its assets load.
 - [ ] Check the homepage and repair form on a mobile viewport.
