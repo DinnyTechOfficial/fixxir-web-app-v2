@@ -21,7 +21,7 @@ export default function HeroSection() {
 
       <div className="relative z-10 mx-auto max-w-6xl">
         <div className="max-w-[640px]">
-          <p className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-[#1769e0]">
+          <p className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-brand">
             Phone & laptop repair in Lagos and Abuja
           </p>
           <h1 className="text-[clamp(3rem,6vw,5.8rem)] font-black leading-[0.9] tracking-[-0.06em] text-[#10213f]">
@@ -36,7 +36,7 @@ export default function HeroSection() {
           <div id="hero-actions" className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
               href="/repair/request"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#1769e0] px-6 font-bold text-white shadow-[0_12px_24px_rgba(23,105,224,0.23)] transition hover:bg-[#0d4db4]"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 font-bold text-white shadow-[0_12px_24px_rgba(23,105,224,0.23)] transition hover:bg-brand-hover"
             >
               Start a repair <Wrench size={17} />
             </a>
@@ -44,7 +44,7 @@ export default function HeroSection() {
               href={getFixxirWhatsAppUrl("Hi Fixxir, I need device repair help")}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[#c7d5e7] bg-white/85 px-6 font-bold text-[#10213f] backdrop-blur-sm transition hover:border-[#1769e0] hover:text-[#1769e0]"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[#c7d5e7] bg-white/85 px-6 font-bold text-[#10213f] backdrop-blur-sm transition hover:border-brand hover:text-brand"
             >
               Chat on WhatsApp <span className="text-[#1ca56c]">●</span>
             </a>

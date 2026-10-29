@@ -82,14 +82,15 @@ export default function Home() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
           <a href="#top" className="inline-flex items-center gap-2 text-xl font-black tracking-tighter text-[#10213f]">
             <Image src="/logo/fixxir-mark.png" alt="" width={36} height={36} priority unoptimized />
-            <span>fixxir<span className="text-[#1769e0]">.</span></span>
+            <span>fixxir<span className="text-brand">.</span></span>
           </a>
           <nav className="hidden items-center gap-7 text-sm font-medium text-[#61708a] lg:flex" aria-label="Main navigation">
-            <a href="#how-it-works" className="transition hover:text-[#1769e0]">How it works</a>
-            <a href="#services" className="transition hover:text-[#1769e0]">Services</a>
-            <a href="#why-fixxir" className="transition hover:text-[#1769e0]">Why Fixxir</a>
-            <a href="#business" className="transition hover:text-[#1769e0]">For business</a>
-            <a href="#faq" className="transition hover:text-[#1769e0]">FAQ</a>
+            <a href="#how-it-works" className="transition hover:text-brand">How it works</a>
+            <a href="#services" className="transition hover:text-brand">Services</a>
+            <a href="#why-fixxir" className="transition hover:text-brand">Why Fixxir</a>
+            <a href="#business" className="transition hover:text-brand">For business</a>
+            <a href="#faq" className="transition hover:text-brand">FAQ</a>
+            <a href="/repair/track" className="transition hover:text-brand">Track repair</a>
           </nav>
           <div className="flex items-center gap-2">
             <a href="#contact" className="hidden px-3 py-2 text-sm font-semibold text-[#61708a] lg:block">Contact</a>
@@ -123,7 +124,7 @@ export default function Home() {
             <div className="mb-8 flex items-center justify-between">
               <a href="#top" onClick={() => setIsMobileMenuOpen(false)} className="inline-flex items-center gap-2 text-xl font-black text-[#10213f]">
                 <Image src="/logo/fixxir-mark.png" alt="" width={32} height={32} unoptimized />
-                <span>fixxir<span className="text-[#1769e0]">.</span></span>
+                <span>fixxir<span className="text-brand">.</span></span>
               </a>
               <button
                 ref={closeMenuButtonRef}
@@ -141,12 +142,13 @@ export default function Home() {
               <a onClick={() => setIsMobileMenuOpen(false)} href="#why-fixxir" className="rounded-lg px-3 py-3 hover:bg-white">Why Fixxir</a>
               <a onClick={() => setIsMobileMenuOpen(false)} href="#business" className="rounded-lg px-3 py-3 hover:bg-white">For business</a>
               <a onClick={() => setIsMobileMenuOpen(false)} href="#faq" className="rounded-lg px-3 py-3 hover:bg-white">FAQ</a>
+              <a onClick={() => setIsMobileMenuOpen(false)} href="/repair/track" className="rounded-lg px-3 py-3 hover:bg-white">Track repair</a>
               <a onClick={() => setIsMobileMenuOpen(false)} href="#contact" className="rounded-lg px-3 py-3 hover:bg-white">Contact</a>
             </nav>
             <a
               href="/repair/request"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="mt-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#1769e0] px-5 font-bold text-white shadow-[0_8px_20px_rgba(23,105,224,0.2)] transition hover:bg-[#0d4db4]"
+              className="mt-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand px-5 font-bold text-white shadow-[0_8px_20px_rgba(23,105,224,0.2)] transition hover:bg-brand-hover"
             >
               Start a repair <ArrowRight size={17} />
             </a>
@@ -162,7 +164,7 @@ export default function Home() {
             </a>
             <a
               href="/repair/request"
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#1769e0] px-3 text-sm font-bold text-white"
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-brand px-3 text-sm font-bold text-white"
             >
               Start a repair
             </a>

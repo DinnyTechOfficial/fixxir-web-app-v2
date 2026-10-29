@@ -6,10 +6,11 @@ Install dependencies and start the development server:
 
 ```bash
 npm ci
+test -f .env.local || cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the app.
+Open [http://localhost:3000](http://localhost:3000) to view the app. The local API origin defaults to `http://localhost:8080`; start the Go API locally or change `NEXT_PUBLIC_FIXXIR_API_URL` in `.env.local`.
 
 ## Checks
 
@@ -31,6 +32,6 @@ Follow [the Cloudflare deployment checklist](docs/cloudflare-deployment-checklis
 
 ## Current application limits
 
-- Repair requests are not persisted; the form only keeps entered data in browser memory and directs customers to contact Fixxir.
+- Repair requests are submitted directly to the Go API. Customers can track repair progress, review quotes, and continue to payment from `/repair/track`.
 - Photo uploads are not sent anywhere.
-- Static export does not provide Next.js SSR, API routes, or server actions. Add an external API or move to a server-capable Cloudflare Workers setup when backend behavior is implemented.
+- The static export does not provide Next.js SSR, API routes, or server actions. Set the build-time `NEXT_PUBLIC_FIXXIR_API_URL` to the HTTPS Go API origin for each Cloudflare Pages environment. See [public repair tracking integration](docs/public-repair-tracking.md).

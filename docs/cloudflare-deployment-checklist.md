@@ -6,6 +6,7 @@ This checklist is for deploying the current Next.js app as a static site on Clou
 
 - [x] `next.config.ts` sets `output: "export"`.
 - [x] `next.config.ts` sets `distDir: "dist"` to match the Cloudflare output directory.
+- [x] `public/_redirects` serves `/repair/track/<pickup-code>` from the exported tracking page so direct pickup links work with static hosting.
 - [x] `npm run build` completes successfully and creates `dist`.
 - [ ] Confirm the production branch and repository root directory in Cloudflare Pages.
 - [ ] Select **Next.js (Static HTML Export)** as the framework preset. Do not select **React (Vite)** for this Next.js project.
@@ -27,23 +28,14 @@ This checklist is for deploying the current Next.js app as a static site on Clou
 
 ## Current functional limits
 
-- The static export does not provide dynamic Next.js API routes. Repair submissions use the root-level Cloudflare Pages Function in `functions/api/repair-requests.ts`.
-- Intake is fail-closed. It remains disabled unless the server-side bindings and `REPAIR_INTAKE_ENABLED=true` are configured; a published HTTPS privacy notice URL is also required.
-- The Apps Script endpoint must return a persisted request ID and enforce idempotency for repeated `submissionId` values. See `repair-intake-integration.md` before deploying the script or enabling intake.
-- Brevo sends the receipt after the Sheet write. If email delivery fails after persistence, the page still confirms the saved request and discloses the email failure. Slack alerts are best-effort.
-- Photo upload is not implemented. The form directs customers to WhatsApp for photos until a signed Cloudinary or backend upload flow is ready.
+- The static export does not provide Next.js SSR, API routes, or server actions. Repair intake and tracking call the Go API from the browser.
+- Photo upload is not implemented. The form directs customers to WhatsApp for photos.
 
-## Pages Function configuration
+## Public repair tracking API
 
-Configure these as Cloudflare Pages server-side variables/secrets, not `NEXT_PUBLIC_*` values:
+Set the build-time variable `NEXT_PUBLIC_FIXXIR_API_URL` to `https://api.fixxir.com` for production, without `/api/v1`. Use the separate HTTPS API origin for staging. This is a public URL, not a secret; Cloudflare Pages must override the local `http://localhost:8080` value from `.env.example`. Configure the API CORS allowlist to include the deployed Fixxir website origin, and set Paystack's checkout callback URL to `https://fixxir.com/repair/track` so customers return to payment verification. See [public repair tracking integration](public-repair-tracking.md) for the request, quote, and payment sequence.
 
-- `REPAIR_INTAKE_ENABLED` — keep `false` until integration and privacy checks are complete; set to `true` only for an intentional launch.
-- `REPAIR_PRIVACY_NOTICE_URL` — published HTTPS privacy notice covering intake data and processors.
-- `APPS_SCRIPT_URL` and `APPS_SCRIPT_TOKEN` — deployed Apps Script web app URL and shared secret.
-- `BREVO_API_KEY` — server-side Brevo API key with transactional sending enabled.
-- `SLACK_WEBHOOK_URL` — optional incoming webhook for minimal request alerts.
-
-The sender and reply-to are currently `no-reply@fixxir.com` and `info@fixxir.com`. Verify the sender with Brevo and configure SPF, DKIM, and DMARC before enabling receipts. `next dev` alone does not execute this function; use the Cloudflare Pages local runtime to test it.
+Remove the old repair-intake Pages Function bindings from Cloudflare Pages after deployment. They are no longer used by this static site. Keep API-side provider configuration in the Go backend environment.
 
 ## If changing to the default `out` directory
 

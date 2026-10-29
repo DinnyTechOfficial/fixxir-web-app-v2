@@ -4,8 +4,8 @@
   --background: #f7f9fc;
   --foreground: #10213f;
   --navy: #10213f;
-  --blue: #1769e0;
-  --blue-dark: #0d4db4;
+  --brand-primary: #1769e0;
+  --brand-primary-hover: #0d4db4;
   --mist: #eef4fc;
   --line: #dce5f1;
   --muted: #61708a;
@@ -14,6 +14,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand-primary);
+  --color-brand-hover: var(--brand-primary-hover);
+  --color-blue-600: var(--brand-primary);
+  --color-blue-700: var(--brand-primary-hover);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

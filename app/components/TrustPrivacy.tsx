@@ -1,7 +1,7 @@
 export default function TrustPrivacy() {
   return (
     <section className="bg-[#f7f9fc] px-5 py-20 sm:px-8 sm:py-28">
-      <div className="mx-auto max-w-6xl"><div className="max-w-2xl"><p className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#1769e0]">Before you hand it over</p><h2 className="text-4xl font-black tracking-tighter text-[#10213f] sm:text-5xl">Your device is personal. We treat it that way.</h2></div><div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto max-w-6xl"><div className="max-w-2xl"><p className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-brand">Before you hand it over</p><h2 className="text-4xl font-black tracking-tighter text-[#10213f] sm:text-5xl">Your device is personal. We treat it that way.</h2></div><div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-2xl border border-[#dce5f1] bg-white p-6">
             <h3 className="font-bold text-lg text-gray-900 mb-3">
               Will you access my data?

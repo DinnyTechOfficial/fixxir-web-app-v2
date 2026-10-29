@@ -1,20 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
-import { Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  FIXXIR_BUSINESS_ADDRESS,
-  FIXXIR_PHONE_DISPLAY,
-  FIXXIR_PHONE_LINK,
-  FIXXIR_SUPPORT_HOURS,
-  getFixxirWhatsAppUrl,
-} from "../../../site-info";
+import { ArrowRight, Check, CircleCheck, Copy, Share2 } from "lucide-react";
+import { FIXXIR_PHONE_DISPLAY, getFixxirWhatsAppUrl } from "../../../site-info";
+
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand("copy");
+  field.remove();
+  if (!copied) throw new Error("Clipboard unavailable");
+}
 
 export default function RepairRequestSuccess() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-gray-600">Checking request confirmation...</div>}>
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-600">Loading confirmation…</main>}>
       <RepairRequestSuccessContent />
     </Suspense>
   );
@@ -22,85 +34,85 @@ export default function RepairRequestSuccess() {
 
 function RepairRequestSuccessContent() {
   const searchParams = useSearchParams();
-  const requestId = searchParams.get("requestId");
-  const emailAccepted = searchParams.get("emailAccepted") === "1";
-  const viaWhatsApp = searchParams.get("via") === "whatsapp";
+  const lookupCode = searchParams.get("lookup") || searchParams.get("requestId") || "";
+  const [copied, setCopied] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
+  const trackingPath = lookupCode ? `/repair/track/${encodeURIComponent(lookupCode)}` : "/repair/track";
+
+  const copyCode = async () => {
+    try {
+      await copyText(lookupCode);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setShareMessage("Copy isn’t available in this browser. Select the code above to copy it.");
+    }
+  };
+
+  const shareCode = async () => {
+    const trackingUrl = new URL(trackingPath, window.location.origin).toString();
+    const shareData = {
+      title: "Track my Fixxir repair",
+      text: `My Fixxir repair lookup code is ${lookupCode}. I can track it at ${trackingUrl}. The email address or phone number used for the request is also needed to verify access.`,
+      url: trackingUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setShareMessage("Share sheet opened.");
+      } else {
+        await copyText(shareData.text);
+        setShareMessage("Repair code and tracking link copied.");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      setShareMessage("Could not share right now. You can copy the code instead.");
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8 flex items-center">
-      <div className="max-w-2xl mx-auto text-center">
-        <div className="mb-6">
-          <MessageCircle className="mx-auto h-16 w-16 text-green-600" />
-        </div>
+    <main className="flex min-h-screen items-center bg-slate-50 px-4 py-10 sm:px-6">
+      <section className="mx-auto w-full max-w-xl rounded-3xl border border-emerald-100 bg-white p-6 text-center shadow-sm sm:p-10">
+        {lookupCode ? (
+          <>
+            <CircleCheck className="mx-auto h-14 w-14 text-emerald-600" aria-hidden="true" />
+            <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Request received</p>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-[#10213f] sm:text-4xl">Your repair is in good hands.</h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">We’ve received your repair request. Save this lookup code so you can return to your repair details and follow progress.</p>
 
-        <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-          {viaWhatsApp
-            ? "Your request is ready to send."
-            : requestId
-              ? "Your repair request has been received."
-              : "No request to confirm yet."}
-        </h1>
-
-        <div className="bg-white rounded-lg border-2 border-green-200 p-8 mb-8">
-          {viaWhatsApp ? (
-            <div className="space-y-3 text-gray-700">
-              <p>
-                WhatsApp should have opened with your repair request filled in.
-                Tap <strong>send</strong> in the chat so Fixxir receives your details.
-              </p>
-              <p>If WhatsApp did not open, use the button below to try again.</p>
+            <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Your repair lookup code</p>
+              <p className="mt-2 select-all font-mono text-3xl font-black tracking-[0.14em] text-[#10213f]" aria-label={`Lookup code ${lookupCode}`}>{lookupCode}</p>
+              <p className="mt-3 text-sm leading-5 text-slate-600">To verify access to tracking, you’ll also need the email address or phone number you used in your request.</p>
             </div>
-          ) : requestId ? (
-            <div className="space-y-3 text-gray-700">
-              <p>Our team will review the details and contact you to confirm the next step.</p>
-              <p className="font-semibold">Request reference: <span className="text-blue-700">{requestId}</span></p>
-              <p role="status">
-                {emailAccepted
-                  ? "The confirmation email was accepted for sending to the address you provided. Check your inbox and spam folder."
-                  : "Your request was saved, but the confirmation email could not be queued. Please contact Fixxir if you need the details resent."}
-              </p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => void copyCode()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                {copied ? <Check size={18} /> : <Copy size={18} />}{copied ? "Code copied" : "Copy lookup code"}
+              </button>
+              <button type="button" onClick={() => void shareCode()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                <Share2 size={18} />Share code
+              </button>
             </div>
-          ) : (
-            <p className="text-gray-700">
-              This page only confirms a request after successful submission. Start a repair request or contact Fixxir directly.
-            </p>
-          )}
-        </div>
+            {shareMessage && <p role="status" className="mt-3 text-sm text-slate-600">{shareMessage}</p>}
 
-        <p className="text-lg text-gray-700 mb-8">
-          Support hours: <strong>{FIXXIR_SUPPORT_HOURS}</strong>. We&apos;ll confirm availability, any applicable fees,
-          and next steps when you contact us.
-        </p>
-
-        <div className="mb-8">
-          <a
-            href={getFixxirWhatsAppUrl(requestId ? `Hi Fixxir, I have a question about repair request ${requestId}.` : "Hi Fixxir, I'd like to request a device repair.")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-12 items-center justify-center bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition"
-          >
-            {requestId ? "Ask Fixxir about this request" : "Contact Fixxir on WhatsApp"}
-          </a>
-          <p className="mt-3 text-sm text-gray-600">{FIXXIR_PHONE_DISPLAY}</p>
-        </div>
-
-        <div className="bg-gray-50 rounded-lg p-6 text-left">
-          <h2 className="font-bold text-gray-900 mb-2">Workshop address</h2>
-          <p className="text-sm text-gray-700">{FIXXIR_BUSINESS_ADDRESS}</p>
-          <p className="mt-3 text-sm text-gray-700">Please contact us to confirm arrangements before visiting.</p>
-        </div>
-
-        <p className="text-gray-600 text-sm mt-8">
-          Prefer to call? <a href={`tel:${FIXXIR_PHONE_LINK}`} className="text-green-700 font-semibold">{FIXXIR_PHONE_DISPLAY}</a>
-        </p>
-
-        <Link
-          href="/"
-          className="inline-block text-blue-600 font-semibold hover:underline mt-6"
-        >
-          ← Back to home
-        </Link>
-      </div>
-    </div>
+            <Link href={trackingPath} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 font-bold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
+              Go to repair tracking<ArrowRight size={19} />
+            </Link>
+            <p className="mt-5 text-sm text-slate-500">Need help? <a href={getFixxirWhatsAppUrl(`Hi Fixxir, I just submitted a repair request. My lookup code is ${lookupCode}.`)} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline underline-offset-2">WhatsApp {FIXXIR_PHONE_DISPLAY}</a></p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-3xl font-black text-[#10213f]">No repair confirmation found</h1>
+            <p className="mt-3 text-slate-600">Start a repair request or enter your lookup code on the tracking page.</p>
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <Link href="/repair/request" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-brand px-5 font-bold text-white hover:bg-blue-700">Start a repair request</Link>
+              <Link href="/repair/track" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 px-5 font-semibold text-slate-700 hover:bg-slate-50">Go to tracking</Link>
+            </div>
+          </>
+        )}
+      </section>
+    </main>
   );
 }

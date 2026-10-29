@@ -47,16 +47,11 @@ Do not relaunch the ₦5,000 offer until those conditions and the fulfilment pro
 
 ### Customer communications
 
-- [x] Select Brevo's HTTPS API for transactional receipts while keeping the site on Cloudflare Pages.
-- [x] Set the intended sender/reply-to and implement the branded receipt template; verify sender/domain authentication and real delivery before launch.
-- [ ] Inspect and update the active Apps Script to persist requests and return a genuine request reference; enforce idempotency before enabling intake.
-- [x] Add a fail-closed Pages Function and confirmation flow; keep `REPAIR_INTAKE_ENABLED` off until the external contract and privacy notice are ready.
+- The Go backend owns customer communication and notification delivery for public repair requests.
 - [ ] Decide which team inbox receives new requests and who monitors it during daily support hours.
 - [ ] Decide whether follow-up is by phone, WhatsApp, email, or a combination; do not promise a response deadline until the operation can meet it.
-- [x] Keep Apps Script, Brevo, and Slack credentials server-side in Cloudflare Pages bindings; never expose them to client-side code.
-- [ ] Approve and publish the privacy notice covering the temporary Sheet, Brevo, Slack, access, and retention before activating intake.
 - [ ] Decide whether photos will use signed Cloudinary uploads or remain on WhatsApp until the main backend is ready.
 
 ## Current website behavior
 
-The form and Cloudflare Pages Function now support a persisted request reference and a Fixxir-branded Brevo receipt, but public intake remains disabled until the existing Apps Script contract, Cloudflare secrets, sender authentication, and approved privacy notice are in place. Photo uploads are not supported; customers are directed to WhatsApp for photos.
+The public form submits repair requests to the Go API and opens the tracking page with the returned lookup code. Customers can follow repair progress, review quotes, and continue to payment. Photo uploads are not supported; customers are directed to WhatsApp for photos.

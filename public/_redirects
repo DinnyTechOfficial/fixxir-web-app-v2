@@ -1,0 +1,2 @@
+# Static export fallback for dynamic public repair tracking URLs.
+/repair/track/* /repair/track.html 200
