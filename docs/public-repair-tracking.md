@@ -45,3 +45,7 @@ The Go API must allow browser CORS requests from the exact deployed website orig
 - Test an expired/used email link with lookup/contact recovery, accepted-but-unpaid retry, and paid/cancelled repairs. Bank details include expiry when the API supplies it.
 
 The quote page keeps its URL during review and does not show the service timeline. Sharing still produces a tracking link without a session token. Browser sessions stay in memory; refreshing requires fresh verification.
+
+## Tracking display
+
+Latest update shows only the newest public event by `occurred_at`. The website splits the API’s combined `in_repair` stage into Repair and Testing using the job status: `in_repair`/`rework_required` activates Repair; `qa_pending`/`qa_in_progress` activates Testing; dispatch-ready and later statuses complete both. Testing does not reuse the repair start timestamp. API-provided completion percentages are retained. If the API supplies an independent testing stage, its stages are used directly.

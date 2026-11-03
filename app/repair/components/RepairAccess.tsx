@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { latestRepairUpdate, repairProgressSteps } from "../tracking-view";
 import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, CheckCircle2, ChevronDown, CircleAlert, ClipboardCheck, Copy, CreditCard, Loader2, LockKeyhole, RefreshCw, Share2, ShieldCheck, Wrench } from "lucide-react";
@@ -373,7 +374,8 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
     { label: "Payment reference", value: "payment_reference_note" in transfer ? String(transfer.payment_reference_note || paymentInit.payment.reference) : paymentInit.payment.reference },
   ] : [];
 
-  const progressSteps = tracking ? [...tracking.tracking_progress.steps].reverse() : [];
+  const latestUpdate = tracking ? latestRepairUpdate(tracking.timeline) : undefined;
+  const progressSteps = tracking ? [...repairProgressSteps(tracking)].reverse() : [];
   const completedOrCurrentSteps = progressSteps.filter((step) => step.state === "completed" || step.state === "current");
   const collapsedProgressSteps = completedOrCurrentSteps.length > 0 ? completedOrCurrentSteps : progressSteps.slice(0, 3);
   const visibleProgressSteps = showAllProgressSteps ? progressSteps : collapsedProgressSteps;
@@ -482,7 +484,7 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
             </div>}
           </section>
 
-          {!quoteMode && tracking.timeline.length > 0 && <section className="rounded-3xl border border-[#e3eaf3] bg-white p-6 shadow-sm sm:p-8"><h2 className="text-xl font-black text-[#10213f]">Latest updates</h2><ol className="mt-5 space-y-4">{[...tracking.timeline].reverse().map((event, index) => <li key={`${event.event_code}-${event.occurred_at}-${index}`} className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600" /><div><p className="font-semibold text-[#243752]">{event.title}</p>{event.note && <p className="mt-1 text-sm text-[#63738b]">{event.note}</p>}<time className="mt-1 block text-xs text-[#8a99ad]">{new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.occurred_at))}</time></div></li>)}</ol></section>}
+          {!quoteMode && latestUpdate && <section className="rounded-3xl border border-[#e3eaf3] bg-white p-6 shadow-sm sm:p-8"><h2 className="text-xl font-black text-[#10213f]">Latest update</h2><ol className="mt-5 space-y-4">{[latestUpdate].map((event, index) => <li key={`${event.event_code}-${event.occurred_at}-${index}`} className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600" /><div><p className="font-semibold text-[#243752]">{event.title}</p>{event.note && <p className="mt-1 text-sm text-[#63738b]">{event.note}</p>}<time className="mt-1 block text-xs text-[#8a99ad]">{new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.occurred_at))}</time></div></li>)}</ol></section>}
 
           {quoteMode && !tracking.quote && <section role="status" className="rounded-3xl border border-blue-200 bg-white p-6"><h2 className="text-xl font-bold">No quote is available yet</h2><p className="mt-2 text-sm text-[#53647d]">Fixxir will email you when your repair quote is ready.</p></section>}
 
