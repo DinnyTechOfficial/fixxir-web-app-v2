@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import RepairQuoteView from "./RepairQuoteView";
+import { clearQuoteSession, readQuoteSession, saveQuoteCheckout, saveQuoteSession } from "../quote-session";
 import { latestRepairUpdate, repairProgressSteps } from "../tracking-view";
 import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
@@ -10,6 +12,7 @@ import {
   createRepairSession,
   exchangeRepairEmailToken,
   formatNaira,
+  PublicApiError,
   publicRepairApi,
   type PaymentInitialization,
   type RepairSession,
@@ -29,6 +32,14 @@ function getEmailTokenFromFragment() {
 function subscribeToFragmentChange(onChange: () => void) {
   window.addEventListener("hashchange", onChange);
   return () => window.removeEventListener("hashchange", onChange);
+}
+
+function getBrowserReady() {
+  return true;
+}
+
+function getServerReady() {
+  return false;
 }
 
 function getServerEmailToken() {
@@ -117,19 +128,24 @@ function getTrustedPaymentURL(value: string) {
   return url;
 }
 
+function checkoutHasExpired(expiresAt: number) {
+  return expiresAt <= Date.now();
+}
+
 function formatTrackingDate(value?: string) {
   if (!value || !Number.isFinite(Date.parse(value))) return "";
   return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-export default function RepairAccess({ mode = "tracking" }: { mode?: "tracking" | "quote" }) {
-  return <Suspense fallback={<main className="flex min-h-screen items-center justify-center text-gray-600">Loading your repair…</main>}><TrackingContent quoteMode={mode === "quote"} /></Suspense>;
+export default function RepairAccess({ mode = "tracking" }: { mode?: "tracking" | "quote" | "payment-return" }) {
+  return <Suspense fallback={<main className="flex min-h-screen items-center justify-center text-gray-600">Loading your repair…</main>}><TrackingContent quoteMode={mode !== "tracking"} returnMode={mode === "payment-return"} /></Suspense>;
 }
 
-function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
+function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; returnMode: boolean }) {
   const searchParams = useSearchParams();
   const lookupFromUrl = searchParams.get("lookup") || "";
   const paymentReference = searchParams.get("reference") || searchParams.get("trxref") || "";
+  const browserReady = useSyncExternalStore(subscribeToFragmentChange, getBrowserReady, getServerReady);
   const emailToken = useSyncExternalStore(subscribeToFragmentChange, getEmailTokenFromFragment, getServerEmailToken);
   const paymentFlow = parsePaymentFlow(useSyncExternalStore(subscribeToPaymentFlow, getPaymentFlowSnapshot, getServerPaymentFlow));
   const pickupCode = useSyncExternalStore(subscribeToPickupCode, getPickupCodeFromPath, getServerPickupCode);
@@ -146,24 +162,53 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [paymentResult, setPaymentResult] = useState<"checking" | "confirmed" | "pending" | "failed" | "error">("checking");
   const [shareMessage, setShareMessage] = useState("");
+  const [paymentLink, setPaymentLink] = useState("");
+  const paymentStarting = useRef(false);
+  const checkoutValidUntil = useRef(0);
   const [showAllProgressSteps, setShowAllProgressSteps] = useState(false);
+  const [showQuoteRecovery, setShowQuoteRecovery] = useState(false);
   const verifyAttempted = useRef("");
+  const restoreAttempted = useRef(false);
+  const [restoreFinished, setRestoreFinished] = useState(false);
   const returnedReference = returnReference || (paymentFlow.lookup === lookupValue ? paymentFlow.reference : "");
 
-  const refresh = useCallback(async (session: RepairSession) => {
+  const refresh = useCallback(async (session: RepairSession, expectedLookup?: string) => {
     setLoading(true);
     setError("");
     try {
       const result = await publicRepairApi<RepairTracking>(session.repair_id, session.access_token);
+      if (expectedLookup && expectedLookup.toUpperCase() !== result.job.public_lookup_code.toUpperCase()) return;
       setRepairId(session.repair_id);
       setSessionToken(session.access_token);
       setTracking(result);
-      if (result.job.payment_status === "paid" || result.payment?.status === "paid") setPaymentInit(null);
+      saveQuoteSession(session);
+      if (quoteMode) {
+        const checkout = readQuoteSession()?.checkout;
+        if (checkout && result.quote?.status === "accepted" && result.payment?.authorization_url === checkout.url &&
+          ["initialized", "pending"].includes(result.payment.status) && result.job.payment_status !== "paid" &&
+          result.job.status !== "cancelled" && checkout.amount === (result.payable_amount ?? result.quote.payable_amount)) {
+          checkoutValidUntil.current = Date.parse(checkout.expires_at);
+          setPaymentLink(checkout.url);
+          setPaymentInit({
+            summary: { quote: result.quote, quote_lines: result.quote_lines, payable_amount: checkout.amount },
+            available_methods: ["hosted_checkout"],
+            payment: { provider: "paystack", reference: checkout.reference, amount: checkout.amount, currency: checkout.currency,
+              methods: { hosted_checkout: { authorization_url: checkout.url, expires_at: checkout.expires_at } } },
+          });
+        }
+      }
+      if (result.job.payment_status === "paid" || result.payment?.status === "paid" || result.job.status === "cancelled") {
+        setPaymentInit(null);
+        setPaymentLink("");
+      }
       setLookup(result.job.public_lookup_code);
       if (!quoteMode) updatePickupCodePath(result.job.public_lookup_code);
       setContact("");
     } catch (err) {
+      if (err instanceof PublicApiError && [401, 403, 404, 410].includes(err.status)) clearQuoteSession();
+      setShowQuoteRecovery(true);
       setTracking(null);
       setRepairId("");
       setSessionToken("");
@@ -173,30 +218,60 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
     }
   }, [quoteMode, setContact, setError, setLoading, setLookup, setRepairId, setSessionToken, setTracking]);
 
+  useEffect(() => {
+    if (!browserReady || restoreAttempted.current) return;
+    restoreAttempted.current = true;
+    // Restore after hydration; a new email link always takes priority over saved access.
+    void Promise.resolve().then(async () => {
+      try {
+        if (!emailToken) {
+          const saved = readQuoteSession();
+          if (saved) await refresh(saved.session, quoteMode ? undefined : (getPickupCodeFromPath() || lookupFromUrl));
+        }
+      } finally {
+        setRestoreFinished(true);
+      }
+    });
+  }, [browserReady, emailToken, lookupFromUrl, quoteMode, refresh]);
+
   const verifyPayment = useCallback(async (id: string, token: string, reference: string) => {
     setBusy(true);
+    setPaymentResult("checking");
     setNotice("Checking the payment status with Fixxir…");
     setError("");
     try {
-      await publicRepairApi(id, token, "/payment/verify", {
+      const verified = await publicRepairApi<{ job: RepairTracking["job"]; payment?: RepairTracking["payment"] }>(id, token, "/payment/verify", {
         method: "POST",
         body: JSON.stringify({ reference }),
       });
+      const confirmed = verified.job.payment_status === "paid" || verified.payment?.status === "paid";
+      setPaymentResult(confirmed ? "confirmed" : ["failed", "cancelled", "abandoned", "expired"].includes(verified.payment?.status || "") ? "failed" : "pending");
       setNotice("Payment status checked.");
-      window.sessionStorage.removeItem("fixxir-repair-payment-flow");
-      window.dispatchEvent(new Event("fixxir-payment-flow-change"));
+      if (confirmed) {
+        try {
+          window.sessionStorage.removeItem("fixxir-repair-payment-flow");
+          window.dispatchEvent(new Event("fixxir-payment-flow-change"));
+        } catch { /* Verification still succeeds when storage is unavailable. */ }
+      }
       const cleanURL = new URL(window.location.href);
-      cleanURL.searchParams.delete("reference");
-      cleanURL.searchParams.delete("trxref");
+      if (confirmed || !returnMode) {
+        cleanURL.searchParams.delete("reference");
+        cleanURL.searchParams.delete("trxref");
+      }
       window.history.replaceState(null, "", `${cleanURL.pathname}${cleanURL.search}${cleanURL.hash}`);
+      if (confirmed && quoteMode) {
+        window.location.replace(`/repair/track/${encodeURIComponent(verified.job.public_lookup_code)}`);
+        return;
+      }
       await refresh({ repair_id: id, access_token: token, expires_at: "" });
     } catch (err) {
       setNotice("");
+      setPaymentResult("error");
       setError(err instanceof Error ? err.message : "We could not verify the payment yet.");
     } finally {
       setBusy(false);
     }
-  }, [refresh]);
+  }, [quoteMode, refresh, returnMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -204,31 +279,42 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
     const currentURL = new URL(window.location.href);
     const queryReference = currentURL.searchParams.get("reference") || currentURL.searchParams.get("trxref") || "";
     const hadLookupInURL = currentURL.searchParams.has("lookup");
+    const hadContactInURL = ["contact", "email", "phone"].some((key) => currentURL.searchParams.has(key));
+    for (const key of ["contact", "email", "phone"]) currentURL.searchParams.delete(key);
     currentURL.searchParams.delete("lookup");
-    if (queryReference) {
+    if (queryReference && !returnMode) {
       currentURL.searchParams.delete("reference");
       currentURL.searchParams.delete("trxref");
     }
-    if (queryReference || hadLookupInURL) {
+    if (queryReference || hadLookupInURL || hadContactInURL) {
       window.history.replaceState(null, "", `${currentURL.pathname}${currentURL.search}${currentURL.hash}`);
     }
-  }, [lookupFromUrl, paymentReference]);
+  }, [lookupFromUrl, paymentReference, returnMode]);
 
   useEffect(() => {
     const reference = returnedReference;
-    if (!reference || !repairId || !sessionToken || verifyAttempted.current === reference) return;
-    verifyAttempted.current = reference;
+    const attempt = `${repairId}:${reference || "latest-payment"}`;
+    if ((!reference && !returnMode) || !repairId || !sessionToken || verifyAttempted.current === attempt) return;
+    verifyAttempted.current = attempt;
     void verifyPayment(repairId, sessionToken, reference);
-  }, [repairId, returnedReference, sessionToken, verifyPayment]);
+  }, [repairId, returnedReference, returnMode, sessionToken, verifyPayment]);
 
-  const verifyRepair = async () => {
+  const verifyRepair = async (submittedLookup = lookupValue, submittedContact = contact) => {
     setPaymentInit(null);
-    if (!lookupValue.trim() || !contact.trim()) return;
+    if (!submittedLookup.trim() || !submittedContact.trim()) return;
+    clearQuoteSession();
+    if (emailToken) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      window.dispatchEvent(new Event("hashchange"));
+    }
+    setTracking(null);
+    setPaymentLink("");
+    verifyAttempted.current = "";
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      const session = await createRepairSession(lookupValue, contact);
+      const session = await createRepairSession(submittedLookup.trim(), submittedContact.trim());
       await refresh(session);
     } catch (err) {
       setError(err instanceof Error ? err.message : "We could not verify those details.");
@@ -239,12 +325,30 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
 
   const findRepair = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void verifyRepair();
+    const fields = new FormData(event.currentTarget);
+    const submittedLookup = String(fields.get("lookup") || "").trim();
+    const submittedContact = String(fields.get("contact") || "").trim();
+    setLookupWasEdited(true);
+    setLookup(submittedLookup);
+    setContact(submittedContact);
+    if (!submittedLookup || !submittedContact) {
+      setError("Enter your repair lookup code and email or phone number.");
+      return;
+    }
+    void verifyRepair(submittedLookup, submittedContact);
   };
 
   const continueFromEmail = async () => {
     if (!emailToken) return;
     const token = emailToken;
+    clearQuoteSession();
+    setTracking(null);
+    setRepairId("");
+    setSessionToken("");
+    setPaymentInit(null);
+    setPaymentLink("");
+    setShareMessage("");
+    setShowQuoteRecovery(false);
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
     window.dispatchEvent(new Event("hashchange"));
     setBusy(true);
@@ -254,19 +358,31 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
       const session = await exchangeRepairEmailToken(token);
       await refresh(session);
     } catch (err) {
+      setShowQuoteRecovery(true);
       setError(err instanceof Error ? err.message : "This quote link is invalid or expired. Request a fresh link or verify your repair details.");
     } finally {
       setBusy(false);
     }
   };
 
-  const startPayment = async () => {
-    if (!tracking?.quote || !["sent", "accepted"].includes(tracking.quote.status) || tracking.job.payment_status === "paid" || tracking.payment?.status === "paid" || tracking.job.status === "cancelled") return;
+  const startPayment = async (shareOnly = false) => {
+    if (busy || loading || paymentStarting.current) return;
+    if (!tracking?.quote || (tracking.payable_amount ?? tracking.quote.payable_amount) <= 0 || !["sent", "accepted"].includes(tracking.quote.status) || tracking.job.payment_status === "paid" || tracking.payment?.status === "paid" || tracking.job.status === "cancelled") return;
+    paymentStarting.current = true;
     setBusy(true);
-    setPaymentInit(null);
+    setShareMessage("");
     setError("");
     setNotice("");
     try {
+      const existingCheckout = paymentInit?.payment.methods.hosted_checkout?.authorization_url;
+      if (tracking.quote.status === "accepted" && existingCheckout && !checkoutHasExpired(checkoutValidUntil.current)) {
+        const url = getTrustedPaymentURL(existingCheckout).toString();
+        if (shareOnly) await shareCheckoutLink(url);
+        else resumePayment(url, paymentInit.payment.reference);
+        return;
+      }
+      setPaymentInit(null);
+      setPaymentLink("");
       const selected = tracking.quote_lines.filter((line) => line.selection_type === "optional" && line.selected).map((line) => line.id);
       if (!repairId || !sessionToken) throw new Error("Verify your repair details again to continue.");
       const result = await publicRepairApi<PaymentInitialization>(repairId, sessionToken, "/payment/initialize", {
@@ -274,31 +390,70 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
         body: JSON.stringify(tracking.quote.status === "sent" ? { selected_optional_line_ids: selected } : {}),
       });
       const checkoutURL = result.payment.methods.hosted_checkout?.authorization_url;
-      if (checkoutURL) getTrustedPaymentURL(checkoutURL);
+      if (!checkoutURL) throw new Error("Secure checkout is unavailable right now. Please try again or contact Fixxir.");
+      const trustedCheckoutURL = getTrustedPaymentURL(checkoutURL).toString();
+      const expiry = Date.parse(result.payment.methods.hosted_checkout?.expires_at || "");
+      checkoutValidUntil.current = Number.isFinite(expiry) ? expiry : 0;
+      if (Number.isFinite(expiry) && checkoutHasExpired(checkoutValidUntil.current)) throw new Error("This checkout link has expired. Please try again.");
       setPaymentInit(result);
+      if (quoteMode && result.payment.methods.hosted_checkout?.expires_at) {
+        saveQuoteCheckout({ url: trustedCheckoutURL, reference: result.payment.reference,
+          expires_at: result.payment.methods.hosted_checkout.expires_at, amount: result.payment.amount, currency: result.payment.currency });
+      }
       setTracking((current) => current ? {
         ...current,
         quote: result.summary.quote ?? current.quote,
         quote_lines: result.summary.quote_lines,
         payable_amount: result.summary.payable_amount,
       } : current);
-      setNotice("Choose a payment method below to continue.");
+      setPaymentLink(trustedCheckoutURL);
+      if (shareOnly) {
+        await shareCheckoutLink(trustedCheckoutURL);
+      } else {
+        setNotice("Opening secure payment…");
+        resumePayment(trustedCheckoutURL, result.payment.reference);
+      }
     } catch (err) {
       // Initialization can accept the quote before a later provider request fails.
       // Reload its status so a retry preserves the accepted selection.
       if (repairId && sessionToken) await refresh({ repair_id: repairId, access_token: sessionToken, expires_at: "" });
       setError(err instanceof Error ? err.message : "We could not start payment. Please try again.");
     } finally {
+      paymentStarting.current = false;
       setBusy(false);
     }
   };
 
+  const shareCheckoutLink = async (checkoutURL: string) => {
+    const url = getTrustedPaymentURL(checkoutURL).toString();
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: "Help pay for a Fixxir repair", text: "You can pay for this repair securely through Paystack.", url });
+        setShareMessage("Payment link shared.");
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setShareMessage("Payment link ready. You can copy it below.");
+          return;
+        }
+      }
+    }
+    try {
+      await copyTextToClipboard(url);
+      setShareMessage("Payment link copied. Send it to the person paying for this repair.");
+    } catch {
+      setShareMessage("Payment link ready. Copy the link below and send it to the person paying.");
+    }
+  };
+
   const updateOptionalLine = async (lineId: string, selected: boolean) => {
-    if (!tracking) return;
+    if (!tracking || busy || loading || tracking.quote?.status !== "sent" || tracking.job.status === "cancelled" || tracking.job.payment_status === "paid" || tracking.payment?.status === "paid") return;
     const selectedIds = tracking.quote_lines
       .filter((line) => line.selection_type === "optional" && (line.id === lineId ? selected : line.selected))
       .map((line) => line.id);
     setBusy(true);
+    setPaymentLink("");
+    setShareMessage("");
     setError("");
     try {
       if (!repairId || !sessionToken) throw new Error("Verify your repair details again to update this quote.");
@@ -316,11 +471,11 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
     }
   };
 
-  const resumePayment = (authorizationURL: string) => {
+  const resumePayment = (authorizationURL: string, reference = paymentInit?.payment.reference || "") => {
     try {
       const url = getTrustedPaymentURL(authorizationURL);
       try {
-        window.sessionStorage.setItem("fixxir-repair-payment-flow", JSON.stringify({ lookup: tracking?.job.public_lookup_code || "", reference: paymentInit?.payment.reference || "" }));
+        window.sessionStorage.setItem("fixxir-repair-payment-flow", JSON.stringify({ lookup: tracking?.job.public_lookup_code || "", reference }));
         window.dispatchEvent(new Event("fixxir-payment-flow-change"));
       } catch {
         // Payment can continue when browser storage is unavailable.
@@ -365,20 +520,52 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
   };
 
   const money = (value?: number | null) => formatNaira(value);
-  const transfer = paymentInit?.payment.methods.generated_transfer_account || paymentInit?.payment.methods.company_bank_transfer_fallback;
-  const transferDetails: Array<{ label: string; value: string }> = transfer && paymentInit ? [
-    { label: "Bank", value: transfer.bank_name },
-    { label: "Account name", value: transfer.account_name },
-    { label: "Account number", value: transfer.account_number },
-    ...(transfer.expires_at ? [{ label: "Expires", value: formatTrackingDate(transfer.expires_at) }] : []),
-    { label: "Payment reference", value: "payment_reference_note" in transfer ? String(transfer.payment_reference_note || paymentInit.payment.reference) : paymentInit.payment.reference },
-  ] : [];
-
   const latestUpdate = tracking ? latestRepairUpdate(tracking.timeline) : undefined;
   const progressSteps = tracking ? [...repairProgressSteps(tracking)].reverse() : [];
   const completedOrCurrentSteps = progressSteps.filter((step) => step.state === "completed" || step.state === "current");
   const collapsedProgressSteps = completedOrCurrentSteps.length > 0 ? completedOrCurrentSteps : progressSteps.slice(0, 3);
   const visibleProgressSteps = showAllProgressSteps ? progressSteps : collapsedProgressSteps;
+
+  if (quoteMode && !returnMode) {
+    return <RepairQuoteView
+      ready={browserReady && restoreFinished} busy={busy} loading={loading} emailToken={emailToken}
+      recovery={emailToken ? false : showQuoteRecovery} tracking={emailToken ? null : tracking} lookup={lookupValue} contact={contact}
+      error={emailToken ? "" : error} notice={emailToken ? "" : notice} shareMessage={shareMessage} paymentLink={paymentLink}
+      paymentLinkExpiresAt={paymentInit?.payment.methods.hosted_checkout?.expires_at}
+      onContinue={() => void continueFromEmail()} onRecover={() => {
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+        window.dispatchEvent(new Event("hashchange"));
+        setShowQuoteRecovery(true);
+      }}
+      onVerify={findRepair} onLookup={(value) => { setLookupWasEdited(true); setLookup(value); }} onContact={setContact}
+      onOptional={(id, selected) => void updateOptionalLine(id, selected)}
+      onPay={() => void startPayment()} onShare={() => void startPayment(true)}
+    />;
+  }
+
+  if (!browserReady || !restoreFinished) {
+    return <main className="flex min-h-screen items-center justify-center bg-[#f7f9fc]" aria-busy="true"><p role="status" className="flex items-center gap-3 text-sm text-[#53647d]"><Loader2 className="animate-spin" size={22} />Restoring your repair…</p></main>;
+  }
+
+  if (returnMode && tracking) {
+    const checking = paymentResult === "checking";
+    const confirmed = paymentResult === "confirmed";
+    const title = confirmed ? "Payment confirmed" : checking ? "Checking payment…" : paymentResult === "failed" ? "Payment unsuccessful" : paymentResult === "error" ? "We couldn’t check your payment" : "Payment pending";
+    return <main className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4 py-10"><section className="w-full max-w-xl rounded-3xl border border-[#e3eaf3] bg-white p-8 shadow-sm" aria-live="polite" aria-busy={checking || busy}>
+      {confirmed ? <CheckCircle2 className="text-green-600" size={40} /> : checking ? <Loader2 className="animate-spin text-blue-600" size={40} /> : <CircleAlert className="text-amber-600" size={40} />}
+      <h1 className="mt-5 text-3xl font-black text-[#10213f]">{title}</h1>
+      <p className="mt-3 text-sm text-[#53647d]">{confirmed ? "Fixxir has confirmed your payment. You can follow your repair’s progress below." : checking ? "Please wait while Fixxir verifies your payment." : "Payment has not been confirmed. If you have been debited, check again before making another payment."}</p>
+      <p className="mt-3 text-sm font-semibold">Repair {tracking.job.public_lookup_code}</p>
+      {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}
+      <div className="mt-6 flex flex-wrap gap-3">
+        {!confirmed && <button type="button" disabled={busy || checking} onClick={() => void verifyPayment(repairId, sessionToken, returnedReference)} className="min-h-12 rounded-xl bg-brand px-5 font-bold text-white disabled:opacity-50">Check again</button>}
+        {paymentResult === "failed" && <button type="button" disabled={busy} onClick={() => void startPayment()} className="min-h-12 rounded-xl border border-blue-200 px-5 font-bold text-blue-700 disabled:opacity-50">Retry payment</button>}
+        <Link href={`/repair/track/${encodeURIComponent(tracking.job.public_lookup_code)}`} className="inline-flex min-h-12 items-center rounded-xl border border-blue-200 px-5 font-bold text-blue-700">Track your repair</Link>
+      </div>
+      {paymentResult === "failed" && paymentInit && !paymentInit.payment.methods.hosted_checkout?.authorization_url && <p className="mt-4 text-sm">Secure checkout is unavailable. Please contact Fixxir for help completing payment.</p>}
+      <a href={getFixxirWhatsAppUrl("Hi Fixxir, I need help confirming my repair payment.")} className="mt-6 inline-block text-sm font-semibold text-blue-700 underline">Contact Fixxir</a>
+    </section></main>;
+  }
 
   return (
     <main className="flex min-h-screen flex-col justify-center bg-[#f3f6fb] px-4 py-6 sm:px-6 sm:py-10">
@@ -388,9 +575,9 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
           <section className="relative isolate overflow-hidden bg-[#10213f] p-7 text-white sm:p-10 lg:p-12">
             <div aria-hidden="true" className="absolute -right-20 -top-24 -z-10 h-72 w-72 rounded-full border-[1px] border-white/10" />
             <div aria-hidden="true" className="absolute -right-8 -top-12 -z-10 h-48 w-48 rounded-full border-[1px] border-white/10" />
-            <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#b8d2ff]"><Wrench size={13} /> {quoteMode ? "Repair quote" : "Repair tracking"}</p>
-            <h1 className="mt-6 max-w-lg text-4xl font-black leading-[1.08] tracking-tight sm:text-5xl">{quoteMode ? <>Your repair quote, <span className="text-[#9fc4ff]">ready to review.</span></> : <>Your repair, <span className="text-[#9fc4ff]">without the guesswork.</span></>}</h1>
-            <p className="mt-5 max-w-md text-sm leading-6 text-[#d1dced] sm:text-base">{quoteMode ? "Review your repair plan, choose optional services, and continue to secure payment." : "One secure place to follow progress, review your repair quote, and complete payment."}</p>
+            <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#b8d2ff]"><Wrench size={13} /> {returnMode ? "Payment status" : quoteMode ? "Repair quote" : "Repair tracking"}</p>
+            <h1 className="mt-6 max-w-lg text-4xl font-black leading-[1.08] tracking-tight sm:text-5xl">{returnMode ? <>Check your <span className="text-[#9fc4ff]">payment status.</span></> : quoteMode ? <>Your repair quote, <span className="text-[#9fc4ff]">ready to review.</span></> : <>Your repair, <span className="text-[#9fc4ff]">without the guesswork.</span></>}</h1>
+            <p className="mt-5 max-w-md text-sm leading-6 text-[#d1dced] sm:text-base">{returnMode ? "Verify your repair details so Fixxir can securely confirm your payment." : quoteMode ? "Review your repair plan, choose optional services, and continue to secure payment." : "One secure place to follow progress, review your repair quote, and complete payment."}</p>
             <ul className="mt-8 space-y-4">
               {[
                 { icon: Wrench, label: "Follow repair progress" },
@@ -405,24 +592,26 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
             {!tracking ? <>
               <div className="flex items-start gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700"><LockKeyhole size={20} /></span>
-                <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Secure lookup</p><h2 className="mt-1 text-2xl font-black tracking-tight text-[#10213f]">Access your repair</h2><p className="mt-1 text-sm leading-5 text-[#71819a]">{quoteMode ? "Continue from your email link, or verify your repair details below if the link has expired or was already used." : "Enter the details from your Fixxir confirmation."}</p></div>
+                <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Secure lookup</p><h2 className="mt-1 text-2xl font-black tracking-tight text-[#10213f]">{quoteMode && !returnMode ? "Open your repair quote" : "Access your repair"}</h2><p className="mt-1 text-sm leading-5 text-[#71819a]">{returnMode ? "Enter the details from your repair confirmation to securely verify payment." : quoteMode ? "Continue from your email link, or verify your repair details below if the link has expired or was already used." : "Enter the details from your Fixxir confirmation."}</p></div>
               </div>
               {emailToken && <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
                 <p className="text-sm leading-5 text-[#3f5575]">A secure quote link was detected. Continue only if you opened this link from Fixxir.</p>
                 <button type="button" onClick={() => void continueFromEmail()} disabled={busy} className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-5 font-bold text-[#10213f] shadow-sm ring-1 ring-blue-100 transition hover:bg-blue-50 disabled:opacity-60">{busy ? "Opening your quote…" : "Continue to quote"}</button>
               </div>}
-              <form onSubmit={findRepair} className="mt-7 space-y-4">
+              {quoteMode && !returnMode && !emailToken && !busy && !loading && !showQuoteRecovery && <p role="status" className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">This page needs the secure link from your quote email. Open “View quote and pay” in the email, or verify your repair details below to recover access.</p>}
+              {quoteMode && !returnMode && !showQuoteRecovery && <button type="button" disabled={busy || loading} onClick={() => setShowQuoteRecovery(true)} className="mt-5 min-h-11 text-sm font-semibold text-blue-700 underline disabled:opacity-50">Use repair details instead</button>}
+              {(!quoteMode || returnMode || showQuoteRecovery) && <form method="post" onSubmit={findRepair} className="mt-7 space-y-4">
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold text-[#273b59]" htmlFor="repair-lookup">Repair lookup code</label>
-                  <input id="repair-lookup" autoComplete="off" maxLength={64} value={lookupValue} onChange={(event) => { setLookupWasEdited(true); setLookup(event.target.value); }} placeholder="e.g. ABCD1234" className="min-h-12 w-full rounded-xl border border-[#d8e1ed] bg-white px-4 text-[#10213f] outline-none transition placeholder:text-[#9aa8ba] focus:border-blue-500 focus:ring-4 focus:ring-blue-100" required />
+                  <input id="repair-lookup" name="lookup" autoComplete="off" maxLength={64} value={lookupValue} onChange={(event) => { setLookupWasEdited(true); setLookup(event.target.value); }} placeholder="e.g. ABCD1234" className="min-h-12 w-full rounded-xl border border-[#d8e1ed] bg-white px-4 text-[#10213f] outline-none transition placeholder:text-[#9aa8ba] focus:border-blue-500 focus:ring-4 focus:ring-blue-100" required />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold text-[#273b59]" htmlFor="repair-contact">Email or phone number</label>
-                  <input id="repair-contact" type="text" autoComplete="off" maxLength={254} value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Used when you requested the repair" className="min-h-12 w-full rounded-xl border border-[#d8e1ed] bg-white px-4 text-[#10213f] outline-none transition placeholder:text-[#9aa8ba] focus:border-blue-500 focus:ring-4 focus:ring-blue-100" required />
+                  <input id="repair-contact" name="contact" type="text" autoComplete="off" maxLength={254} value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Used when you requested the repair" className="min-h-12 w-full rounded-xl border border-[#d8e1ed] bg-white px-4 text-[#10213f] outline-none transition placeholder:text-[#9aa8ba] focus:border-blue-500 focus:ring-4 focus:ring-blue-100" required />
                   <p className="mt-2 text-xs leading-5 text-[#71819a]">For a phone number, include the country code (for example, +234).</p>
                 </div>
-                <button type="submit" disabled={busy || loading || !lookupValue.trim() || !contact.trim()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 font-bold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{busy || loading ? <Loader2 size={18} className="animate-spin" /> : null}{busy || loading ? "Checking your repair…" : "Verify repair"}</button>
-              </form>
+                <button type="submit" disabled={busy || loading} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 font-bold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{busy || loading ? <Loader2 size={18} className="animate-spin" /> : null}{busy || loading ? "Checking your repair…" : "Verify repair"}</button>
+              </form>}
               <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-[#71819a]"><LockKeyhole size={14} className="mt-0.5 shrink-0" />Your details are sent securely to Fixxir and are not added to the page URL.</p>
             </> : <div className="rounded-2xl border border-green-100 bg-green-50/60 p-5">
               <div className="flex items-start gap-3"><CheckCircle2 size={21} className="mt-0.5 shrink-0 text-green-700" /><div><p className="font-bold text-[#183f30]">Secure access is active</p><p className="mt-1 text-sm leading-5 text-[#547166]">Your repair details are available in this page session.</p></div></div>
@@ -493,10 +682,6 @@ function TrackingContent({ quoteMode }: { quoteMode: boolean }) {
             {["sent", "accepted"].includes(tracking.quote.status) && tracking.job.payment_status !== "paid" && tracking.payment?.status !== "paid" && tracking.job.status !== "cancelled" && <div className="mt-4"><p className="mb-3 text-sm text-[#63738b]">{tracking.quote.status === "sent" ? "Optional items can be selected before payment. Starting payment saves your selection and confirms acceptance of this quote." : "Your quote is accepted. Continue payment using your confirmed repair selection."}</p><button type="button" onClick={() => void startPayment()} disabled={busy} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 font-bold text-white hover:bg-blue-700 disabled:opacity-60"><CreditCard size={18} />{busy ? "Preparing payment…" : `${tracking.quote.status === "accepted" ? "Continue payment" : "Continue to payment"} · ${money(tracking.payable_amount ?? tracking.quote.payable_amount)}`}</button></div>}
             {tracking.quote.estimated_duration_days != null && <p className="mt-4 text-xs text-[#71819a]">Estimated duration: {tracking.quote.estimated_duration_days} days</p>}
           </section>}
-
-          {paymentInit && transfer && <section className="rounded-3xl border border-blue-200 bg-blue-50 p-6 sm:p-8"><h2 className="text-xl font-black text-[#10213f]">Bank transfer details</h2><p className="mt-2 text-sm text-[#53647d]">Transfer {money(paymentInit.payment.amount)} and include the payment reference if one is shown.</p><dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">{transferDetails.map(({ label, value }) => <div key={label} className="rounded-xl bg-white p-3"><dt className="text-xs text-[#71819a]">{label}</dt><dd className="mt-1 break-all font-bold text-[#1b2e4c]">{value}</dd></div>)}</dl><p className="mt-4 text-xs text-[#53647d]">Payment status updates after Fixxir confirms the transfer. Use Refresh to check progress.</p></section>}
-
-          {paymentInit?.payment.methods.hosted_checkout?.authorization_url && <section className="rounded-3xl border border-green-200 bg-white p-6 shadow-sm"><h2 className="font-black text-[#10213f]">Secure card or bank payment</h2><p className="mt-2 text-sm text-[#53647d]">Continue to Paystack to complete {money(paymentInit.payment.amount)}.</p><button type="button" onClick={() => resumePayment(paymentInit.payment.methods.hosted_checkout!.authorization_url)} className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-green-600 px-5 font-bold text-white hover:bg-green-700">Pay securely</button></section>}
 
           {tracking.payment && <section className="rounded-3xl border border-[#e3eaf3] bg-white p-6 shadow-sm"><h2 className="font-black text-[#10213f]">Payment status</h2><p className="mt-2 text-sm capitalize text-[#53647d]">{tracking.payment.status.replaceAll("_", " ")} · {money(tracking.payment.amount)}</p>{tracking.payment.status !== "paid" && tracking.payment.authorization_url && <button type="button" onClick={() => resumePayment(tracking.payment!.authorization_url!)} className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-brand px-5 font-bold text-white">Resume secure payment</button>}</section>}
         </div>}
