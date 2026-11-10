@@ -20,7 +20,7 @@ Set `NEXT_DEV_ALLOWED_ORIGINS` in `.env.local` to your tunnel hostname (without 
 NEXT_DEV_ALLOWED_ORIGINS=your-tunnel.ngrok-free.app
 ```
 
-Next.js checks the browser origin on development endpoints, including the WebSocket used during hydration. Without this setting, a tunneled page can show static HTML while its buttons and email-token detection remain inactive. Multiple hostnames can be separated by commas. Update this value when the tunnel hostname changes.
+Next.js checks the browser origin on development endpoints, including the WebSocket used during hydration. Without this setting, a tunneled page can show static HTML while its buttons and email-token detection remain inactive. Multiple hostnames can be separated by commas. Full HTTP(S) tunnel URLs are also accepted and normalized to hostnames. Update this value when the tunnel hostname changes. The machine’s active IPv4 interface addresses are allowed automatically for LAN development.
 
 Set the API and email worker’s `REPAIR_QUOTE_ACCESS_URL` to `https://your-tunnel.ngrok-free.app/repair/quote` for testing. Quote links keep `#email_token=...` in the browser; the customer clicks **Continue to quote** to exchange it. API CORS must also allow the tunnel origin for subsequent API requests.
 
