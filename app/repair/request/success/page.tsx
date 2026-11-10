@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check, CircleCheck, Copy, Share2 } from "lucide-react";
 import { FIXXIR_PHONE_DISPLAY, getFixxirWhatsAppUrl } from "../../../site-info";
@@ -34,7 +34,16 @@ export default function RepairRequestSuccess() {
 
 function RepairRequestSuccessContent() {
   const searchParams = useSearchParams();
-  const lookupCode = searchParams.get("lookup") || searchParams.get("requestId") || "";
+  const lookupCode = searchParams.get("lookup") || "";
+  const [devices, setDevices] = useState<string[]>([]);
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('fixxir-service-request-confirmation') || 'null');
+        if (saved?.lookup === lookupCode && Array.isArray(saved.devices)) setDevices(saved.devices.filter((value: unknown) => typeof value === 'string'));
+      } catch { /* Recover through authenticated tracking. */ }
+    });
+  }, [lookupCode]);
   const [copied, setCopied] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
   const trackingPath = lookupCode ? `/repair/track/${encodeURIComponent(lookupCode)}` : "/repair/track";
@@ -77,9 +86,10 @@ function RepairRequestSuccessContent() {
         {lookupCode ? (
           <>
             <CircleCheck className="mx-auto h-14 w-14 text-emerald-600" aria-hidden="true" />
-            <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Request received</p>
+            <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{devices.length ? 'Request received' : 'Request reference'}</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-[#10213f] sm:text-4xl">Your repair is in good hands.</h1>
-            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">We’ve received your repair request. Save this lookup code so you can return to your repair details and follow progress.</p>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">Save this request code to view your devices and follow progress. Verify access on tracking to confirm the current request details.</p>
+            {!!devices.length && <ul className="mt-4 space-y-2 text-sm text-slate-600" aria-label="Submitted devices">{devices.map((device, index) => <li key={index}>{device}</li>)}</ul>}
 
             <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Your repair lookup code</p>

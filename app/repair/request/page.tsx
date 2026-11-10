@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { shouldRenewSubmission } from '../service-request-rules.mjs';
 import {
   ArrowLeft,
   BatteryCharging,
@@ -87,6 +88,7 @@ interface RepairFormData {
 interface Step2Data {
   issues?: string[];
   details?: string;
+  serialNumber?: string;
 }
 
 interface Step3Data {
@@ -203,10 +205,13 @@ function Step1Device({ data, onNext, onChange }: Step1Props) {
 
   useEffect(() => {
     let active = true;
-    setDeviceTypesLoading(true);
-    getPublicDeviceTypes()
+    Promise.resolve().then(() => {
+      if (!active) return;
+      setDeviceTypesLoading(true);
+      return getPublicDeviceTypes();
+    })
       .then((response) => {
-        if (active) {
+        if (active && response) {
           setDeviceTypes(response.items);
           setCatalogError("");
         }
@@ -223,18 +228,14 @@ function Step1Device({ data, onNext, onChange }: Step1Props) {
 
   useEffect(() => {
     if (!step1Data.deviceType) {
-      setBrandResults([]);
-      setBrandHasNext(false);
-      setBrandPage(1);
-      setBrandLoading(false);
       return;
     }
 
     const requestId = ++brandSearchRequest.current;
     const controller = new AbortController();
-    setBrandLoading(true);
-    setCatalogError("");
     const timer = window.setTimeout(() => {
+      setBrandLoading(true);
+      setCatalogError("");
       getPublicManufacturers(step1Data.deviceType!, brandQuery, 1, { signal: controller.signal })
         .then((response) => {
           if (!controller.signal.aborted && requestId === brandSearchRequest.current) {
@@ -259,19 +260,15 @@ function Step1Device({ data, onNext, onChange }: Step1Props) {
 
   useEffect(() => {
     if (!step1Data.brand?.id) {
-      setModelResults([]);
-      setModelHasNext(false);
-      setModelPage(1);
-      setModelLoading(false);
       return;
     }
 
     const requestId = ++modelSearchRequest.current;
     const manufacturerId = step1Data.brand.id;
     const controller = new AbortController();
-    setModelLoading(true);
-    setCatalogError("");
     const timer = window.setTimeout(() => {
+      setModelLoading(true);
+      setCatalogError("");
       getPublicModels(manufacturerId, modelQuery, 1, { signal: controller.signal })
         .then((response) => {
           if (!controller.signal.aborted && requestId === modelSearchRequest.current) {
@@ -671,6 +668,7 @@ function Step2Problem({ data, onNext, onPrev, onChange }: StepNavigationProps) {
       <div>
         <label htmlFor="repair-issue-details" className="mb-2 block text-sm font-semibold text-gray-700">Tell us more{otherSelected ? " *" : " (optional)"}</label>
         <textarea id="repair-issue-details" required={otherSelected} aria-invalid={Boolean(detailsError)} aria-describedby={detailsError ? "repair-issue-details-error" : undefined} value={step2Data.details || ""} onChange={(event) => { setStep2Data({ ...step2Data, details: event.target.value }); if (event.target.value.trim()) setDetailsError(""); }} placeholder={otherSelected ? "Describe the issue..." : "Add any additional details about the problem..."} className={`w-full rounded-lg border-2 px-3 py-2 outline-none focus:border-blue-600 ${detailsError ? "border-red-500" : "border-gray-300"}`} rows={4} />
+        <label className="mt-4 block text-sm font-semibold text-gray-700">Serial number (optional)<input value={step2Data.serialNumber || ''} onChange={event => setStep2Data({ ...step2Data, serialNumber: event.target.value })} maxLength={128} className="mt-2 block w-full rounded-lg border-2 border-gray-300 px-3 py-2" /></label>
         {detailsError && <p id="repair-issue-details-error" role="alert" className="mt-2 text-sm text-red-600">{detailsError}</p>}
       </div>
 
@@ -956,21 +954,6 @@ function Step6Review({ data, onSubmit, onPrev, submitting, submitError }: Review
 
       <div className="bg-gray-50 rounded-lg p-6 space-y-4">
         <div>
-          <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Device</p>
-          <p className="text-lg font-semibold text-gray-900">
-            {data?.step1?.deviceTypeLabel || "Device type not specified"}
-          </p>
-          <p className="text-lg font-semibold text-gray-900">
-            {data?.step1?.brand?.name || "Manufacturer not specified"} — {data?.step1?.model?.name || "Model not specified"}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Problem</p>
-          <p className="text-lg font-semibold text-gray-900">{data?.step2?.issues?.join(", ")}</p>
-        </div>
-
-        <div>
           <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold">Contact</p>
           <p className="text-lg font-semibold text-gray-900">{[data?.step3?.firstName, data?.step3?.lastName].filter(Boolean).join(" ")}</p>
           <p className="text-sm text-gray-600">{data?.step3?.phone}</p>
@@ -1024,6 +1007,15 @@ export default function RepairRequestForm() {
   const [formData, setFormData] = useState<RepairFormData>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [submitDetails, setSubmitDetails] = useState<Record<string, string>>({});
+  const [devices, setDevices] = useState<Array<{ client_item_id: string; step1: DeviceStepData; step2: Step2Data }>>([]);
+  const activeItem = useRef('');
+  const submission = useRef<{ payload: string; token: string } | null>(null);
+  const submittingRef = useRef(false);
+  const [returnMethod, setReturnMethod] = useState('customer_pickup');
+  const [returnAddress, setReturnAddress] = useState('');
+  const [returnCity, setReturnCity] = useState('');
+  const [returnState, setReturnState] = useState('');
 
   const totalSteps = 6;
 
@@ -1060,9 +1052,11 @@ export default function RepairRequestForm() {
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError("");
+    setSubmitDetails({});
     try {
       const step1 = formData.step1;
       const step2 = formData.step2;
@@ -1078,17 +1072,20 @@ export default function RepairRequestForm() {
       const firstName = step3.firstName.trim();
       const lastName = step3.lastName.trim();
       const fullName = `${firstName} ${lastName}`;
+      if (!devices.length) throw new Error('Add at least one device.');
+      if (returnMethod === 'courier_return' && (!returnAddress.trim() || !returnCity.trim() || !returnState.trim())) throw new Error('Enter the shared return address, city, and state.');
       const urgencyLabels: Record<string, string> = { asap: "As soon as possible", "1-2days": "Within 1–2 days", week: "This week", nourgency: "No urgent deadline" };
       const intake = {
+        service_type: 'repair',
         first_name: firstName,
         last_name: lastName,
         email: step3.email.trim(),
         phone: step3.phone.trim(),
         whatsapp_phone: step3.phone.trim(),
-        model_id: step1.model.id,
-        description: [step2.issues.join(", "), step2.details?.trim(), formData.step5?.urgency ? `Requested timing: ${urgencyLabels[formData.step5.urgency] || formData.step5.urgency}` : ""].filter(Boolean).join(" — "),
+        jobs: devices.map(device => ({ client_item_id: device.client_item_id, model_id: device.step1.model?.id, device_serial_number: device.step2.serialNumber?.trim() || '',
+          description: [device.step2.issues?.join(', '), device.step2.details?.trim(), formData.step5?.urgency ? `Requested timing: ${urgencyLabels[formData.step5.urgency] || formData.step5.urgency}` : ''].filter(Boolean).join(' — ') })),
         collection_handoff_method: step4.handoff === "pickup" ? "courier_pickup" : "customer_dropoff",
-        return_handoff_method: "customer_pickup",
+        return_handoff_method: returnMethod,
         collection_recipient_name: fullName,
         collection_recipient_phone: step3.phone.trim(),
         collection_address_line_1: step4.address?.trim() || "",
@@ -1099,17 +1096,29 @@ export default function RepairRequestForm() {
         collection_availability_window_label: step4.collectionWindow || "",
         return_recipient_name: fullName,
         return_recipient_phone: step3.phone.trim(),
-        return_city: step4.area.trim(),
-        return_state: step4.state,
+        return_address_line_1: returnMethod === 'courier_return' ? returnAddress.trim() : '',
+        return_city: returnMethod === 'courier_return' ? returnCity.trim() : step4.area.trim(),
+        return_state: returnMethod === 'courier_return' ? returnState.trim() : step4.state,
         return_country_code: "NG",
       };
-      const summary = await publicApi<{ token: string }>("/public/repairs/summary", { method: "POST", body: JSON.stringify(intake) });
-      const created = await publicApi<{ public_lookup_code: string }>("/public/repairs", { method: "POST", body: JSON.stringify({ ...intake, submission_token: summary.token }) });
+      const payload = JSON.stringify(intake);
+      if (submission.current?.payload !== payload) {
+        const summary = await publicApi<{ token: string }>("/public/service-requests/summary", { method: "POST", body: payload });
+        submission.current = { payload, token: summary.token };
+      }
+      const created = await publicApi<{ public_lookup_code: string }>("/public/service-requests", { method: "POST", body: JSON.stringify({ ...intake, submission_token: submission.current!.token }) });
       if (!created.public_lookup_code) throw new PublicApiError("The request was saved, but we could not open its tracking page. Please contact Fixxir.", 502);
+      try { sessionStorage.setItem('fixxir-service-request-confirmation', JSON.stringify({ lookup: created.public_lookup_code, devices: devices.map(device => `${device.step1.brand?.name || ''} ${device.step1.model?.name || ''}`) })); } catch { /* Tracking still works without storage. */ }
       router.push(`/repair/request/success?lookup=${encodeURIComponent(created.public_lookup_code)}`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "We could not submit your request. Please try again.");
+      if (shouldRenewSubmission(error)) {
+        submission.current = null;
+        setSubmitError('Your summary expired. Submit again to refresh it safely.');
+      }
+      if (error instanceof PublicApiError) setSubmitDetails(error.details || {});
       setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 
@@ -1132,8 +1141,29 @@ export default function RepairRequestForm() {
 
         {/* Form Card */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8">
+          {currentStep >= 3 && <section className="mb-6 rounded-xl border border-gray-200 p-4" aria-label="Devices in this request">
+            <h2 className="font-bold text-gray-900">Devices in this request</h2>
+            {devices.map((device, index) => <article key={device.client_item_id} data-client-item-id={device.client_item_id} className="mt-3 rounded-lg border border-gray-100 p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-3"><strong className="flex-1">{device.step1.brand?.name} {device.step1.model?.name}</strong>
+                <button type="button" disabled={submitting} className="font-semibold text-blue-600" onClick={() => { activeItem.current = device.client_item_id; setFormData(previous => ({ ...previous, step1: device.step1, step2: device.step2 })); setCurrentStep(1); writeRepairWizardStepToHistory(1); }}>Edit</button>
+                <button type="button" disabled={submitting || devices.length <= 1} className="text-red-700 disabled:opacity-40" onClick={() => setDevices(previous => previous.filter(item => item.client_item_id !== device.client_item_id))}>Remove</button>
+              </div>
+              <p className="mt-2 text-gray-600">{device.step2.issues?.join(', ')}{device.step2.details ? ` — ${device.step2.details}` : ''}</p>
+              {device.step2.serialNumber && <p className="mt-1 text-gray-500">Serial: {device.step2.serialNumber}</p>}
+              {Object.entries(submitDetails).filter(([key]) => key.includes(device.client_item_id) || key.startsWith(`jobs.${index}.`) || key.startsWith(`jobs[${index}]`)).map(([key, message]) => <p role="alert" key={key} className="mt-2 text-red-700">{message}</p>)}
+            </article>)}
+            <button type="button" disabled={submitting} className="mt-4 font-semibold text-blue-600" onClick={() => { activeItem.current = ''; setFormData(previous => ({ ...previous, step1: undefined, step2: undefined })); setCurrentStep(1); writeRepairWizardStepToHistory(1); }}>Add another device</button>
+          </section>}
+          {currentStep === 6 && <section className="mb-6 space-y-3 rounded-xl border border-gray-200 p-4"><h2 className="font-bold">Shared return details</h2><p className="text-sm text-gray-600">All received devices will be returned together.</p><label className="block text-sm">Return method<select className="mt-2 block w-full rounded-lg border border-gray-300 p-3" value={returnMethod} disabled={submitting} onChange={event => setReturnMethod(event.target.value)}><option value="customer_pickup">I will collect all devices</option><option value="courier_return">Return all devices by courier</option></select></label>{returnMethod === 'courier_return' && <>{[['Return address', returnAddress, setReturnAddress], ['Return city', returnCity, setReturnCity], ['Return state', returnState, setReturnState]].map(([label, value, setter]) => <label key={label as string} className="block text-sm">{label as string}<input className="mt-2 block w-full rounded-lg border border-gray-300 p-3" required maxLength={254} value={value as string} disabled={submitting} onChange={event => (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)} /></label>)}</>}</section>}
           {currentStep === 1 && <Step1Device data={formData} onNext={handleNext} onChange={setFormData} />}
-          {currentStep === 2 && <Step2Problem data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
+          {currentStep === 2 && <Step2Problem data={formData} onNext={handleNext} onPrev={handlePrev} onChange={next => {
+            setFormData(next);
+            if (next.step1 && next.step2) {
+              if (!activeItem.current) activeItem.current = crypto.randomUUID();
+              const device = { client_item_id: activeItem.current, step1: next.step1, step2: next.step2 };
+              setDevices(previous => previous.some(item => item.client_item_id === device.client_item_id) ? previous.map(item => item.client_item_id === device.client_item_id ? device : item) : [...previous, device]);
+            }
+          }} />}
           {currentStep === 3 && <Step3CustomerInfo data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
           {currentStep === 4 && <Step4Location data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
           {currentStep === 5 && <Step5Timing data={formData} onNext={handleNext} onPrev={handlePrev} onChange={setFormData} />}
