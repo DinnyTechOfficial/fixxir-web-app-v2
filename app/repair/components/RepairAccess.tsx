@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import RepairQuoteView from "./RepairQuoteView";
+import PaymentResultModal, { type PaymentResult } from "./PaymentResultModal";
+import { parsePaymentReturn, paymentReturnKeys } from "../payment-return";
 import { clearQuoteSession, readQuoteSession, saveQuoteCheckout, saveQuoteSession } from "../quote-session";
 import { latestRepairUpdate, nearbyRepairProgressSteps, repairProgressSteps } from "../tracking-view";
 import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -90,7 +92,7 @@ function updatePickupCodePath(code: string) {
   if (typeof window === "undefined") return;
   const path = code ? `/repair/track/${encodeURIComponent(code)}` : "/repair/track";
   if (window.location.pathname === path) return;
-  window.history.replaceState(null, "", path);
+  window.history.replaceState(null, "", `${path}${window.location.search}${window.location.hash}`);
   window.dispatchEvent(new Event("fixxir-pickup-code-change"));
 }
 
@@ -144,7 +146,8 @@ export default function RepairAccess({ mode = "tracking" }: { mode?: "tracking" 
 function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; returnMode: boolean }) {
   const searchParams = useSearchParams();
   const lookupFromUrl = searchParams.get("lookup") || "";
-  const paymentReference = searchParams.get("reference") || searchParams.get("trxref") || "";
+  const paymentReference = parsePaymentReturn(searchParams).reference;
+  const [paymentReturn] = useState(() => parsePaymentReturn(searchParams));
   const browserReady = useSyncExternalStore(subscribeToFragmentChange, getBrowserReady, getServerReady);
   const emailToken = useSyncExternalStore(subscribeToFragmentChange, getEmailTokenFromFragment, getServerEmailToken);
   const paymentFlow = parsePaymentFlow(useSyncExternalStore(subscribeToPaymentFlow, getPaymentFlowSnapshot, getServerPaymentFlow));
@@ -162,7 +165,8 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [paymentResult, setPaymentResult] = useState<"checking" | "confirmed" | "pending" | "failed" | "error">("checking");
+  const [paymentResult, setPaymentResult] = useState<PaymentResult>("checking");
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
   const [paymentLink, setPaymentLink] = useState("");
   const paymentStarting = useRef(false);
@@ -170,16 +174,18 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
   const [showAllProgressSteps, setShowAllProgressSteps] = useState(false);
   const [showQuoteRecovery, setShowQuoteRecovery] = useState(false);
   const verifyAttempted = useRef("");
+  const paymentAcknowledged = useRef(false);
   const restoreAttempted = useRef(false);
   const [restoreFinished, setRestoreFinished] = useState(false);
-  const returnedReference = returnReference || (paymentFlow.lookup === lookupValue ? paymentFlow.reference : "");
+  const returnedReference = returnReference || (paymentReturn.hasReturn && paymentFlow.lookup === lookupValue ? paymentFlow.reference : "");
 
   const refresh = useCallback(async (session: RepairSession, expectedLookup?: string) => {
     setLoading(true);
     setError("");
     try {
       const result = await publicRepairApi<RepairTracking>(session.repair_id, session.access_token);
-      if (expectedLookup && expectedLookup.toUpperCase() !== result.job.public_lookup_code.toUpperCase()) return;
+      if (expectedLookup && expectedLookup.toUpperCase() !== result.job.public_lookup_code.toUpperCase()) return false;
+      if (paymentReturn.repairId && session.repair_id.toLowerCase() !== paymentReturn.repairId) return false;
       setRepairId(session.repair_id);
       setSessionToken(session.access_token);
       setTracking(result);
@@ -206,6 +212,7 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
       setLookup(result.job.public_lookup_code);
       if (!quoteMode) updatePickupCodePath(result.job.public_lookup_code);
       setContact("");
+      return true;
     } catch (err) {
       if (err instanceof PublicApiError && [401, 403, 404, 410].includes(err.status)) clearQuoteSession();
       setShowQuoteRecovery(true);
@@ -213,10 +220,11 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
       setRepairId("");
       setSessionToken("");
       setError(err instanceof Error ? err.message : "We could not load this repair.");
+      return false;
     } finally {
       setLoading(false);
     }
-  }, [quoteMode, setContact, setError, setLoading, setLookup, setRepairId, setSessionToken, setTracking]);
+  }, [paymentReturn.repairId, quoteMode, setContact, setError, setLoading, setLookup, setRepairId, setSessionToken, setTracking]);
 
   useEffect(() => {
     if (!browserReady || restoreAttempted.current) return;
@@ -226,17 +234,18 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
       try {
         if (!emailToken) {
           const saved = readQuoteSession();
-          if (saved) await refresh(saved.session, quoteMode ? undefined : (getPickupCodeFromPath() || lookupFromUrl));
+          if (saved && (!paymentReturn.repairId || saved.session.repair_id.toLowerCase() === paymentReturn.repairId)) await refresh(saved.session, quoteMode ? undefined : (getPickupCodeFromPath() || lookupFromUrl));
         }
       } finally {
         setRestoreFinished(true);
       }
     });
-  }, [browserReady, emailToken, lookupFromUrl, quoteMode, refresh]);
+  }, [browserReady, emailToken, lookupFromUrl, paymentReturn.repairId, quoteMode, refresh]);
 
   const verifyPayment = useCallback(async (id: string, token: string, reference: string) => {
     setBusy(true);
     setPaymentResult("checking");
+    setPaymentModalOpen(true);
     setNotice("Checking the payment status with Fixxir…");
     setError("");
     try {
@@ -245,25 +254,16 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
         body: JSON.stringify({ reference }),
       });
       const confirmed = verified.job.payment_status === "paid" || verified.payment?.status === "paid";
-      setPaymentResult(confirmed ? "confirmed" : ["failed", "cancelled", "abandoned", "expired"].includes(verified.payment?.status || "") ? "failed" : "pending");
-      setNotice("Payment status checked.");
+      const result: PaymentResult = confirmed ? "confirmed" : ["failed", "cancelled", "abandoned", "expired"].includes(verified.payment?.status || "") ? "failed" : "pending";
+      setNotice("");
       if (confirmed) {
         try {
           window.sessionStorage.removeItem("fixxir-repair-payment-flow");
           window.dispatchEvent(new Event("fixxir-payment-flow-change"));
         } catch { /* Verification still succeeds when storage is unavailable. */ }
       }
-      const cleanURL = new URL(window.location.href);
-      if (confirmed || !returnMode) {
-        cleanURL.searchParams.delete("reference");
-        cleanURL.searchParams.delete("trxref");
-      }
-      window.history.replaceState(null, "", `${cleanURL.pathname}${cleanURL.search}${cleanURL.hash}`);
-      if (confirmed && quoteMode) {
-        window.location.replace(`/repair/track/${encodeURIComponent(verified.job.public_lookup_code)}`);
-        return;
-      }
-      await refresh({ repair_id: id, access_token: token, expires_at: "" });
+      const updated = await refresh({ repair_id: id, access_token: token, expires_at: "" });
+      setPaymentResult(updated ? result : "error");
     } catch (err) {
       setNotice("");
       setPaymentResult("error");
@@ -271,22 +271,17 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
     } finally {
       setBusy(false);
     }
-  }, [quoteMode, refresh, returnMode]);
+  }, [refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const currentURL = new URL(window.location.href);
-    const queryReference = currentURL.searchParams.get("reference") || currentURL.searchParams.get("trxref") || "";
     const hadLookupInURL = currentURL.searchParams.has("lookup");
-    const hadContactInURL = ["contact", "email", "phone"].some((key) => currentURL.searchParams.has(key));
-    for (const key of ["contact", "email", "phone"]) currentURL.searchParams.delete(key);
+    const hadContactInURL = ["contact", "email", "phone", "session_id", "access_token", "token"].some((key) => currentURL.searchParams.has(key));
+    for (const key of ["contact", "email", "phone", "session_id", "access_token", "token"]) currentURL.searchParams.delete(key);
     currentURL.searchParams.delete("lookup");
-    if (queryReference && !returnMode) {
-      currentURL.searchParams.delete("reference");
-      currentURL.searchParams.delete("trxref");
-    }
-    if (queryReference || hadLookupInURL || hadContactInURL) {
+    if (hadLookupInURL || hadContactInURL) {
       window.history.replaceState(null, "", `${currentURL.pathname}${currentURL.search}${currentURL.hash}`);
     }
   }, [lookupFromUrl, paymentReference, returnMode]);
@@ -294,10 +289,25 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
   useEffect(() => {
     const reference = returnedReference;
     const attempt = `${repairId}:${reference || "latest-payment"}`;
-    if ((!reference && !returnMode) || !repairId || !sessionToken || verifyAttempted.current === attempt) return;
+    // Saving a reference before leaving for Paystack is not a payment return.
+    // Only the tracking callback may verify it and open the result modal.
+    if (quoteMode || !paymentReturn.hasReturn || paymentAcknowledged.current || paymentModalOpen || !repairId || !sessionToken || verifyAttempted.current === attempt) return;
     verifyAttempted.current = attempt;
     void verifyPayment(repairId, sessionToken, reference);
-  }, [repairId, returnedReference, returnMode, sessionToken, verifyPayment]);
+  }, [paymentModalOpen, paymentReturn.hasReturn, quoteMode, repairId, returnedReference, sessionToken, verifyPayment]);
+
+  const acknowledgePayment = () => {
+    paymentAcknowledged.current = true;
+    setPaymentModalOpen(false);
+    setNotice("");
+    const url = new URL(window.location.href);
+    for (const key of paymentReturnKeys) url.searchParams.delete(key);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    try {
+      window.sessionStorage.removeItem("fixxir-repair-payment-flow");
+      window.dispatchEvent(new Event("fixxir-payment-flow-change"));
+    } catch { /* The modal can still be dismissed when storage is unavailable. */ }
+  };
 
   const verifyRepair = async (submittedLookup = lookupValue, submittedContact = contact) => {
     setPaymentInit(null);
@@ -310,11 +320,14 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
     setTracking(null);
     setPaymentLink("");
     verifyAttempted.current = "";
+    paymentAcknowledged.current = false;
+    setPaymentModalOpen(false);
     setBusy(true);
     setError("");
     setNotice("");
     try {
       const session = await createRepairSession(submittedLookup.trim(), submittedContact.trim());
+      if (paymentReturn.repairId && session.repair_id.toLowerCase() !== paymentReturn.repairId) throw new Error("These details do not match the repair in this payment link.");
       await refresh(session);
     } catch (err) {
       setError(err instanceof Error ? err.message : "We could not verify those details.");
@@ -547,25 +560,6 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
     return <main className="flex min-h-screen items-center justify-center bg-[#f7f9fc]" aria-busy="true"><p role="status" className="flex items-center gap-3 text-sm text-[#53647d]"><Loader2 className="animate-spin" size={22} />Restoring your repair…</p></main>;
   }
 
-  if (returnMode && tracking) {
-    const checking = paymentResult === "checking";
-    const confirmed = paymentResult === "confirmed";
-    const title = confirmed ? "Payment confirmed" : checking ? "Checking payment…" : paymentResult === "failed" ? "Payment unsuccessful" : paymentResult === "error" ? "We couldn’t check your payment" : "Payment pending";
-    return <main className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4 py-10"><section className="w-full max-w-xl rounded-3xl border border-[#e3eaf3] bg-white p-8 shadow-sm" aria-live="polite" aria-busy={checking || busy}>
-      {confirmed ? <CheckCircle2 className="text-green-600" size={40} /> : checking ? <Loader2 className="animate-spin text-blue-600" size={40} /> : <CircleAlert className="text-amber-600" size={40} />}
-      <h1 className="mt-5 text-3xl font-black text-[#10213f]">{title}</h1>
-      <p className="mt-3 text-sm text-[#53647d]">{confirmed ? "Fixxir has confirmed your payment. You can follow your repair’s progress below." : checking ? "Please wait while Fixxir verifies your payment." : "Payment has not been confirmed. If you have been debited, check again before making another payment."}</p>
-      <p className="mt-3 text-sm font-semibold">Repair {tracking.job.public_lookup_code}</p>
-      {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}
-      <div className="mt-6 flex flex-wrap gap-3">
-        {!confirmed && <button type="button" disabled={busy || checking} onClick={() => void verifyPayment(repairId, sessionToken, returnedReference)} className="min-h-12 rounded-xl bg-brand px-5 font-bold text-white disabled:opacity-50">Check again</button>}
-        {paymentResult === "failed" && <button type="button" disabled={busy} onClick={() => void startPayment()} className="min-h-12 rounded-xl border border-blue-200 px-5 font-bold text-blue-700 disabled:opacity-50">Retry payment</button>}
-        <Link href={`/repair/track/${encodeURIComponent(tracking.job.public_lookup_code)}`} className="inline-flex min-h-12 items-center rounded-xl border border-blue-200 px-5 font-bold text-blue-700">Track your repair</Link>
-      </div>
-      {paymentResult === "failed" && paymentInit && !paymentInit.payment.methods.hosted_checkout?.authorization_url && <p className="mt-4 text-sm">Secure checkout is unavailable. Please contact Fixxir for help completing payment.</p>}
-      <a href={getFixxirWhatsAppUrl("Hi Fixxir, I need help confirming my repair payment.")} className="mt-6 inline-block text-sm font-semibold text-blue-700 underline">Contact Fixxir</a>
-    </section></main>;
-  }
 
   return (
     <main className="flex min-h-screen flex-col justify-center bg-[#f3f6fb] px-4 py-6 sm:px-6 sm:py-10">
@@ -688,6 +682,8 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
 
         <p className="mt-6 text-center text-sm text-[#71819a]">Need help? <a href={getFixxirWhatsAppUrl(lookupValue ? `Hi Fixxir, I need help tracking repair ${lookupValue}.` : "Hi Fixxir, I need help with a repair.")} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">WhatsApp {FIXXIR_PHONE_DISPLAY}</a></p>
       </div>
+      <PaymentResultModal open={Boolean(tracking) && paymentModalOpen} result={paymentResult} busy={busy || loading} error={error}
+        onOkay={acknowledgePayment} onCheckAgain={() => void verifyPayment(repairId, sessionToken, returnedReference)} />
     </main>
   );
 }

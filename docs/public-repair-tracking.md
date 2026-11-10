@@ -40,7 +40,7 @@ The Go API must allow browser CORS requests from the exact deployed website orig
 - Deploy the website first and confirm `/repair/quote` loads directly.
 - Configure `REPAIR_QUOTE_ACCESS_URL=https://fixxir.com/repair/quote` identically in the Go API and email worker. Keep JWT secrets consistent between those services.
 - Set the website build-time `NEXT_PUBLIC_FIXXIR_API_URL` to the HTTPS API origin and allow the exact website origin in API CORS.
-- Set the Paystack callback to `https://fixxir.com/repair/payment/return`; customers restore their same-tab session or re-verify contact details there before payment verification.
+- Set the Paystack callback to `https://fixxir.com/repair/track`; customers restore their same-tab session or re-verify contact details there before payment verification.
 - Smoke-test a fresh quote email: loading the page must not exchange the token. Click Continue to quote, review required and optional lines, initialize payment, and verify payment after returning.
 - Test an expired/used email link with lookup/contact recovery, accepted-but-unpaid retry, and paid/cancelled repairs. No temporary or company transfer account details are displayed.
 
@@ -52,11 +52,22 @@ The collapsed timeline shows the current stage, up to two preceding stages, and 
 
 Latest update shows only the newest public event by `occurred_at`. The website splits the API’s combined `in_repair` stage into Repair and Testing using the job status: `in_repair`/`rework_required` activates Repair; `qa_pending`/`qa_in_progress` activates Testing; dispatch-ready and later statuses complete both. Testing does not reuse the repair start timestamp. API-provided completion percentages are retained. If the API supplies an independent testing stage, its stages are used directly.
 
-## Payment return page
+## Payment return on tracking
 
-`/repair/payment/return` accepts Paystack `reference` or `trxref` query parameters. After an unexpired tab session is restored, or lookup/contact verification establishes a fresh session, it calls payment verification and shows checking, confirmed, pending, unsuccessful, or verification-error states. Success requires an API-confirmed paid status, then the page redirects to `/repair/track/{lookup_code}` and restores the same valid tab session. Pending and error states allow another check; unsuccessful payments allow retry. If the reference is missing, the authenticated verification request sends an empty reference so the API resolves the repair’s latest payment. Pending references remain in the URL so reloading can resume verification.
+The preferred payment callback is `/repair/track`. It accepts `payment_reference`, `reference`, or `trxref`. `status=true|success|failed|pending` (or `payment_status`) indicates a payment return, but never determines the displayed outcome. `payment_return=1` can explicitly mark a callback without a reference. If the reference is missing, the authenticated API verifies the repair’s latest payment.
 
-Deploy this route before changing the API/Paystack checkout callback configuration to `https://fixxir.com/repair/payment/return`. The checkout URL and callback are created by the backend; this website change does not update backend environment settings. The legacy tracking callback continues to support verification.
+A valid saved tab session restores tracking. An optional `repair_id` UUID binds the callback to the matching repair; it is an identifier, not authorization. If there is no matching valid session, the customer verifies repair details before any payment result is shown. Never pass the bearer/session token in the query string.
+
+The tracking page opens an accessible modal while the API verifies payment, reloads repair data, then shows confirmed, pending, unsuccessful, or verification-error results. **Okay** dismisses the modal and removes callback parameters, revealing the refreshed tracking data. Pending/error states offer **Check again**. URL status parameters cannot mark a repair as paid.
+
+Both `/repair/payment/return` and the backend’s `/repair/{repair_uuid}/payment/confirm?payment_reference=...` forward to this tracking flow. The UUID route uses a development rewrite and a Cloudflare Pages static rewrite, preserving the identifier and payment reference without adding a second payment UI.
+
+Example callback:
+
+```text
+https://fixxir.com/repair/track?repair_id=REPAIR_UUID&payment_reference=REFERENCE&status=success
+```
+
 
 The quote entry screen prioritizes **Continue to quote** when a valid email token is present. Lookup/contact fields are shown only after selecting **Use repair details instead** or after an exchange/load failure. A missing token shows a recovery explanation instead of silently presenting the tracking form.
 
@@ -74,4 +85,10 @@ The quote page saves only `repair_id`, `access_token`, and the original `expires
 
 A new email token takes precedence over saved access. Switching email links or submitting contact verification clears the prior saved access. Expired/malformed sessions and API 401/403/404/410 responses clear saved access. Storage failures leave the current page usable but disable restoration. The initial loading screen stays visible until restoration completes.
 
-Confirmed payments redirect from quote/payment-return views to the tracking page with `location.replace`, so Back does not reopen the callback. Pending, unsuccessful, or verification-error results stay on the callback. Tracking restoration checks that the saved repair matches the lookup code in the requested URL before displaying it.
+Legacy callback pages redirect to tracking with `location.replace`. All payment-result states are displayed in the tracking modal after API verification. Tracking restoration checks that the saved repair matches the lookup code in the requested URL before displaying it.
+
+During local development, use the same frontend origin for the quote and the payment callback. `http://192.168.x.x:3001` and an HTTPS ngrok hostname have separate `sessionStorage`; switching between them requires fresh repair verification. Next.js automatically allows the machine’s own active IPv4 interface addresses for its development endpoints.
+
+Legacy callback normalization also recognizes `/repair/track{repair_uuid}/payment/confirm` and `/repair/track/{repair_uuid}/payment/confirm`, retaining the UUID and reference. Backends should generate the canonical `/repair/track?repair_id=...&payment_reference=...` URL instead of concatenating a UUID onto `/repair/track`.
+
+Automatic payment verification runs only on tracking pages with explicit callback parameters. Recording a newly initialized checkout in browser storage does not start verification or navigate to tracking. The quote Pay action navigates directly to the validated Paystack checkout URL; callback verification begins only when the customer returns.

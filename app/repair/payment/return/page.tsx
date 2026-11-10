@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import RepairAccess from "../../components/RepairAccess";
+import PaymentReturnRedirect from "../../components/PaymentReturnRedirect";
 
 export const metadata: Metadata = {
   title: "Payment status | Fixxir",
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function PaymentReturnPage() {
-  return <RepairAccess mode="payment-return" />;
+  return <PaymentReturnRedirect />;
 }

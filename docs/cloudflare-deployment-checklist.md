@@ -33,7 +33,7 @@ This checklist is for deploying the current Next.js app as a static site on Clou
 
 ## Public repair tracking API
 
-Set the build-time variable `NEXT_PUBLIC_FIXXIR_API_URL` to `https://api.fixxir.com` for production, without `/api/v1`. Use the separate HTTPS API origin for staging. This is a public URL, not a secret; Cloudflare Pages must override the local `http://localhost:8080` value from `.env.example`. Configure the API CORS allowlist to include the deployed Fixxir website origin, and set Paystack's checkout callback URL to `https://fixxir.com/repair/payment/return` so customers return to payment verification. See [public repair tracking integration](public-repair-tracking.md) for the request, quote, and payment sequence.
+Set the build-time variable `NEXT_PUBLIC_FIXXIR_API_URL` to `https://api.fixxir.com` for production, without `/api/v1`. Use the separate HTTPS API origin for staging. This is a public URL, not a secret; Cloudflare Pages must override the local `http://localhost:8080` value from `.env.example`. Configure the API CORS allowlist to include the deployed Fixxir website origin, and set Paystack's checkout callback URL to `https://fixxir.com/repair/track` so customers return to payment verification. See [public repair tracking integration](public-repair-tracking.md) for the request, quote, and payment sequence.
 
 Remove the old repair-intake Pages Function bindings from Cloudflare Pages after deployment. They are no longer used by this static site. Keep API-side provider configuration in the Go backend environment.
 

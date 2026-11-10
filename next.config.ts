@@ -22,7 +22,11 @@ const nextConfig: NextConfig = {
       .filter(Boolean),
     ],
     async rewrites() {
-      return [{ source: "/repair/track/:pickupCode", destination: "/repair/track" }];
+      return [
+        { source: "/repair/track/:repairId/payment/confirm", destination: "/repair/payment/return" },
+        { source: "/repair/track/:pickupCode", destination: "/repair/track" },
+        { source: "/repair/:repairId/payment/confirm", destination: "/repair/payment/return" },
+      ];
     },
   } : {}),
   output: "export",
