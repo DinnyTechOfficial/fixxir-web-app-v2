@@ -48,6 +48,8 @@ The quote page keeps its URL during review and does not show the service timelin
 
 ## Tracking display
 
+The collapsed timeline shows the current stage, up to two preceding stages, and the next stage. It retains the latest-first display order. At the beginning or end, only available stages are shown. **See all steps** expands the complete timeline. The active display stage takes priority over the API’s grouped stage code so Testing is centered correctly.
+
 Latest update shows only the newest public event by `occurred_at`. The website splits the API’s combined `in_repair` stage into Repair and Testing using the job status: `in_repair`/`rework_required` activates Repair; `qa_pending`/`qa_in_progress` activates Testing; dispatch-ready and later statuses complete both. Testing does not reuse the repair start timestamp. API-provided completion percentages are retained. If the API supplies an independent testing stage, its stages are used directly.
 
 ## Payment return page

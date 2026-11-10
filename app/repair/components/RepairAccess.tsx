@@ -3,7 +3,7 @@
 import Link from "next/link";
 import RepairQuoteView from "./RepairQuoteView";
 import { clearQuoteSession, readQuoteSession, saveQuoteCheckout, saveQuoteSession } from "../quote-session";
-import { latestRepairUpdate, repairProgressSteps } from "../tracking-view";
+import { latestRepairUpdate, nearbyRepairProgressSteps, repairProgressSteps } from "../tracking-view";
 import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, CheckCircle2, ChevronDown, CircleAlert, ClipboardCheck, Copy, CreditCard, Loader2, LockKeyhole, RefreshCw, Share2, ShieldCheck, Wrench } from "lucide-react";
@@ -521,9 +521,9 @@ function TrackingContent({ quoteMode, returnMode }: { quoteMode: boolean; return
 
   const money = (value?: number | null) => formatNaira(value);
   const latestUpdate = tracking ? latestRepairUpdate(tracking.timeline) : undefined;
-  const progressSteps = tracking ? [...repairProgressSteps(tracking)].reverse() : [];
-  const completedOrCurrentSteps = progressSteps.filter((step) => step.state === "completed" || step.state === "current");
-  const collapsedProgressSteps = completedOrCurrentSteps.length > 0 ? completedOrCurrentSteps : progressSteps.slice(0, 3);
+  const chronologicalProgressSteps = tracking ? repairProgressSteps(tracking) : [];
+  const progressSteps = [...chronologicalProgressSteps].reverse();
+  const collapsedProgressSteps = [...nearbyRepairProgressSteps(chronologicalProgressSteps, tracking?.tracking_progress.current_step_code || "")].reverse();
   const visibleProgressSteps = showAllProgressSteps ? progressSteps : collapsedProgressSteps;
 
   if (quoteMode && !returnMode) {

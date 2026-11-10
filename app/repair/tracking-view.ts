@@ -2,6 +2,17 @@ import type { RepairTracking } from "./public-api";
 
 type ProgressStep = RepairTracking["tracking_progress"]["steps"][number];
 
+export function nearbyRepairProgressSteps(steps: ProgressStep[], currentStepCode: string): ProgressStep[] {
+  if (!steps.length) return [];
+  let current = steps.findIndex((step) => step.state === "current");
+  if (current < 0) current = steps.findIndex((step) => step.code === currentStepCode);
+  if (current < 0) {
+    current = steps.reduce((latest, step, index) => step.state === "completed" ? index : latest, -1);
+  }
+  if (current < 0) current = 0;
+  return steps.slice(Math.max(0, current - 2), current + 2);
+}
+
 export function latestRepairUpdate(events: RepairTracking["timeline"]) {
   return events.reduce<(typeof events)[number] | undefined>((latest, event) => {
     const timestamp = Date.parse(event.occurred_at);
